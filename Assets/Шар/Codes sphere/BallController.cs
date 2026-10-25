@@ -8,41 +8,74 @@ public class BallController : MonoBehaviour
     public Transform cameraTransform;
 
     [Header("Movement Settings")]
+    [Tooltip("Сила крутящего момента для движения шара")]
     public float torqueStrength = 15f;
+    [Tooltip("Максимальная скорость движения шара")]
     public float maxSpeed = 10f;
+    [Tooltip("Максимальная угловая скорость")]
     public float maxAngularVelocity = 25f;
+    
+    [Tooltip("Множитель ускорения при начале движения (0.0-1.0 для плавного старта)")]
+    [Range(0f, 1f)]
+    public float accelerationMultiplier = 0.8f;
+    
+    [Tooltip("Множитель замедления при отпускании ввода (0.0-1.0)")]
+    [Range(0f, 1f)]
+    public float decelerationMultiplier = 0.6f;
+    
+    [Tooltip("Время плавного ускорения до полной силы (в секундах)")]
+    public float accelerationRampTime = 0.3f;
 
     [Header("Brake Settings")]
+    [Tooltip("Сила торможения")]
     public float brakeStrength = 4f;
+    [Tooltip("Угловое демпфирование при торможении")]
     public float brakeAngularDamping = 10f;
 
-    [Header("Grip & Inertia (Плавное сцепление с платформами)")]
+    [Header("Grip & Inertia (Плавное сцепление с платформой)")]
     [Tooltip("Время сглаживания скорости сразу после отпускания ввода (мягкое начало сцепления)")]
     public float gripSmoothTimeStart = 0.8f;
-    [Tooltip("Время сглаживания скорости после полного 'созревания' сцепления (более крепкое, но всё ещё плавное)")]
+    [Tooltip("Время сглаживания скорости после полного 'созревания' (без задержки, не сразу после ввода)")]
     public float gripSmoothTimeMax = 0.15f;
-    [Tooltip("Аналогично для углового сглаживания в начале")]
+    [Tooltip("Аналогично для угловой скорости сглаживания в начале")]
     public float rotationSmoothTimeStart = 0.6f;
-    [Tooltip("Аналогично для углового сглаживания в максимуме")]
+    [Tooltip("Аналогично для угловой скорости сглаживания в максимуме")]
     public float rotationSmoothTimeMax = 0.12f;
 
-    [Tooltip("Через сколько секунд после отпускания ввода сцепление достигает максимума (gripSmoothTimeMax)")]
+    [Tooltip("Через сколько секунд скорость после отпускания ввода достигает максимума (gripSmoothTimeMax)")]
     public float gripRampDuration = 0.6f;
-    [Tooltip("Если относительная скорость ниже этого порога — сцепление сразу считается 'созревшим' наполовину (не ждём всю задержку)")]
+    [Tooltip("Ещё один параметр: если скорость ниже этого порога, то сцепление срабатывает сразу без задержки (не ждём gripRampDuration)")]
     public float gripVelocityThreshold = 0.5f;
 
-    [Header("Position Anchor (устраняет сползание при вращении платформы)")]
-    [Tooltip("Насколько сильно шар подтягивается обратно к 'своей' точке на платформе, компенсируя снос из-за вращения. 0 = коррекция выключена")]
+    [Header("Position Anchor (Устраняет сползание при вращении платформы)")]
+    [Tooltip("Насколько сильно шар подтягивается к 'якорю' на платформе, если не движется")]
     public float anchorCorrectionStrength = 6f;
-    [Tooltip("Максимальная скорость коррекции позиции — ограничивает рывок, если накопился большой снос")]
+    [Tooltip("Максимальная скорость коррекции позиции — ограничивает рывки")]
     public float anchorMaxCorrectionSpeed = 5f;
 
     [Header("Air Control")]
-    [Tooltip("Множитель силы управления в воздухе относительно наземного torqueStrength")]
+    [Tooltip("Множитель силы управления в воздухе от torqueStrength")]
     [Range(0f, 1f)] public float airControlFactor = 0.2f;
-    [Tooltip("Сила (не момент вращения!), которой шар толкается в воздухе. " +
-             "Не крутит шар, а именно смещает его — раскрутки без контакта с землёй не будет.")]
+    [Tooltip("Сила (м/с²) для управления в воздухе через AddForce")]
     public float airControlForce = 20f;
+    
+    [Tooltip("Дополнительный множитель для воздуха при движении по склонам")]
+    [Range(0f, 1f)]
+    public float airSlopeControlFactor = 0.5f;
+
+    [Header("Advanced Physics")]
+    [Tooltip("Дополнительная гравитация при подъеме (для более отзывчивого прыжка)")]
+    public float extraGravityRise = 0f;
+    [Tooltip("Дополнительная гравитация при падении (для более быстрого спуска)")]
+    public float extraGravityFall = 0f;
+    
+    [Tooltip("Максимальный угол наклона, при котором шар может катиться вверх")]
+    [Range(0f, 90f)]
+    public float maxUphillAngle = 30f;
+    
+    [Tooltip("Множитель силы при движении вверх по склону")]
+    [Range(0f, 1f)]
+    public float uphillTorqueMultiplier = 0.5f;
 
     private Rigidbody rb;
     private GroundCheck ground;
@@ -50,6 +83,7 @@ public class BallController : MonoBehaviour
     private BallInputActions inputActions;
 
     private Vector2 moveInput;
+    private Vector2 lastMoveInput;
     private bool isBraking;
     private float defaultAngularDamping;
     private float lastMoveTime;
@@ -60,10 +94,15 @@ public class BallController : MonoBehaviour
     private Vector3 velocityRef;
     private Vector3 angularVelocityRef;
 
-    // Для позиционного якоря на платформе
+    // Для позиционного якоря
     private Transform activePlatformTransform;
     private Vector3 anchorLocalPos;
     private bool hasAnchor;
+    
+    // Для плавного ускорения
+    private float currentTorqueMultiplier = 0f;
+    private float inputMagnitudeHistory = 0f;
+    private float accelerationRampVelocity = 0f;
 
     private void Awake()
     {
@@ -104,6 +143,7 @@ public class BallController : MonoBehaviour
 
     private void OnMovePerformed(InputAction.CallbackContext ctx)
     {
+        lastMoveInput = moveInput;
         moveInput = ctx.ReadValue<Vector2>();
         lastMoveTime = Time.time;
     }
@@ -122,7 +162,7 @@ public class BallController : MonoBehaviour
             {
                 if (!ReferenceEquals(activePlatform, platform))
                 {
-                    // Сменилась платформа - старый якорь больше не валиден
+                    // Сменилаcь платформа - сбросим якорь
                     hasAnchor = false;
                 }
                 activePlatform = platform;
@@ -151,7 +191,8 @@ public class BallController : MonoBehaviour
         Vector3 camRight = Vector3.ProjectOnPlane(cameraTransform.right, Vector3.up).normalized;
         Vector3 moveDir = (camForward * moveInput.y + camRight * moveInput.x).normalized;
 
-        float control = (ground.IsGrounded ? 1f : airControlFactor) * slopeSlide.SlopeControlFactor;
+        // Вычисляем текущий множитель управления
+        float control = (ground.IsGrounded ? 1f : airControlFactor * airSlopeControlFactor) * slopeSlide.SlopeControlFactor;
 
         // 2. Данные платформы (если есть)
         Vector3 pVel = Vector3.zero;
@@ -162,10 +203,70 @@ public class BallController : MonoBehaviour
             pAngVel = activePlatform.GetAngularVelocity();
         }
 
-        // 3. Обновляем таймер последнего ввода
+        // 3. Обновляем таймер последнего движения
         if (moveInput.sqrMagnitude > 0.01f) lastMoveTime = Time.time;
 
-        // 4. Логика торможения (активное) или обычное управление
+        // ===== ПЛАВНОЕ УСКОРЕНИЕ =====
+        // Вычисляем изменение величины ввода
+        float currentInputMagnitude = moveInput.magnitude;
+        float inputChange = currentInputMagnitude - inputMagnitudeHistory;
+        inputMagnitudeHistory = currentInputMagnitude;
+        
+        // Плавно меняем множитель крутящего момента при ускорении
+        if (currentInputMagnitude > 0.01f)
+        {
+            // При нажатии - плавно увеличиваем силу
+            currentTorqueMultiplier = Mathf.SmoothDamp(
+                currentTorqueMultiplier, 
+                1f, 
+                ref accelerationRampVelocity,
+                accelerationRampTime
+            );
+        }
+        else if (currentTorqueMultiplier > 0.01f)
+        {
+            // При отпускании - плавно уменьшаем силу
+            currentTorqueMultiplier = Mathf.Lerp(
+                currentTorqueMultiplier, 
+                0f, 
+                decelerationMultiplier * Time.fixedDeltaTime * 10f
+            );
+        }
+        else
+        {
+            currentTorqueMultiplier = 0f;
+        }
+        
+        // Учитываем наклон поверхности
+        float slopeFactor = 1f;
+        if (ground.IsGrounded)
+        {
+            float slopeAngle = Vector3.Angle(ground.GroundNormal, Vector3.up);
+            
+            // Если движемся вверх по склону, уменьшаем силу
+            if (moveDir != Vector3.zero && slopeAngle > 5f)
+            {
+                Vector3 moveDirHorizontal = new Vector3(moveDir.x, 0, moveDir.z).normalized;
+                Vector3 slopeDownDir = Vector3.ProjectOnPlane(Vector3.down, ground.GroundNormal).normalized;
+                
+                // Проверяем движемся ли вверх по склону
+                float dot = Vector3.Dot(moveDirHorizontal, slopeDownDir);
+                if (dot < 0) // Движение вверх по склону
+                {
+                    float uphillAngle = slopeAngle;
+                    // Чем круче склон и чем выше угол движения против склона, тем сильнее уменьшаем силу
+                    float uphillMultiplier = Mathf.Clamp01(
+                        1f - (uphillAngle / maxUphillAngle) * (1f - uphillTorqueMultiplier)
+                    );
+                    slopeFactor = uphillMultiplier;
+                }
+            }
+        }
+        
+        // Конечный множитель torque
+        float finalTorqueMultiplier = currentTorqueMultiplier * slopeFactor * accelerationMultiplier;
+
+        // 4. Логика торможения или обычного движения
         if (ground.IsGrounded && isBraking)
         {
             hasAnchor = false; // во время активного торможения якорь не нужен
@@ -180,22 +281,18 @@ public class BallController : MonoBehaviour
             {
                 if (ground.IsGrounded)
                 {
-                    // На земле – качение через момент силы (крутит шар, трение о поверхность
-                    // превращает вращение в реальное перемещение)
+                    // На земле - качение через крутящий момент
                     Vector3 torqueAxis = Vector3.Cross(Vector3.up, moveDir);
-                    rb.AddTorque(torqueAxis * torqueStrength * control, ForceMode.Acceleration);
+                    rb.AddTorque(torqueAxis * torqueStrength * control * finalTorqueMultiplier, ForceMode.Acceleration);
                 }
                 else
                 {
-                    // В воздухе контакта с поверхностью нет, поэтому крутящий момент
-                    // никак не гасится и раскручивает шар до предела без всякого смещения.
-                    // Вместо этого толкаем шар напрямую силой в сторону ввода —
-                    // так в воздухе шар слегка "рулится", но не набирает лишнее вращение.
+                    // В воздухе - применение силы напрямую
+                    // Это позволяет лучше контролировать шар в полете
                     rb.AddForce(moveDir * airControlForce * airControlFactor * slopeSlide.SlopeControlFactor, ForceMode.Acceleration);
                 }
 
-                // Сбрасываем "память" SmoothDamp и якорь - при следующем отпускании
-                // кнопки сцепление и привязка к платформе стартуют заново, без рывка
+                // Сбрасываем "память" SmoothDamp и якорь
                 velocityRef = Vector3.zero;
                 angularVelocityRef = Vector3.zero;
                 hasAnchor = false;
@@ -207,7 +304,7 @@ public class BallController : MonoBehaviour
                 Vector3 relativeVel = rb.linearVelocity - pVel;
                 Vector3 horizRelVel = new Vector3(relativeVel.x, 0f, relativeVel.z);
 
-                // 0 = только отпустили ввод, 1 = сцепление полностью "созрело"
+                // 0 = только что отпустили ввод, 1 = сцепление полностью "созрело"
                 float rampT = Mathf.Clamp01(timeSinceMove / Mathf.Max(gripRampDuration, 0.0001f));
 
                 if (horizRelVel.magnitude < gripVelocityThreshold)
@@ -246,8 +343,8 @@ public class BallController : MonoBehaviour
                     hasAnchor = false;
                 }
 
-                // Корректируем только ГОРИЗОНТАЛЬНУЮ скорость через AddForce (VelocityChange),
-                // оставляя Y-составляющую и реакцию нормалей PhysX под контролем движка.
+                // Корректируем скорость через AddForce (VelocityChange),
+                // оставляя Y-составляющую нетронутой и позволяя PhysX контролировать движение по вертикали.
                 Vector3 currentHorizVel = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
                 Vector3 targetHorizVel = new Vector3(pVel.x + anchorCorrectionVel.x, 0f, pVel.z + anchorCorrectionVel.z);
 
@@ -263,7 +360,7 @@ public class BallController : MonoBehaviour
                 Vector3 horizVelChange = smoothHorizVel - currentHorizVel;
                 rb.AddForce(horizVelChange, ForceMode.VelocityChange);
 
-                // Изменение угловой скорости через AddTorque
+                // Изменение угловой скорости
                 Vector3 smoothAngVel = Vector3.SmoothDamp(
                     rb.angularVelocity,
                     pAngVel,
@@ -282,15 +379,18 @@ public class BallController : MonoBehaviour
             }
         }
 
-        // 5. Ограничение максимальной горизонтальной скорости (относительно платформы)
+        // 5. Ограничение максимальной горизонтальной скорости
         LimitVelocity(pVel);
+        
+        // 6. Дополнительная гравитация
+        ApplyExtraGravity();
     }
 
     private void ApplyBraking(Vector3 pVel, Vector3 pAngVel)
     {
         rb.angularDamping = Mathf.Lerp(rb.angularDamping, brakeAngularDamping, Time.fixedDeltaTime * 10f);
 
-        // Тормозим только горизонтальную составляющую через AddForce
+        // Тормозим только горизонтальную скорость через AddForce
         Vector3 currentRelVel = rb.linearVelocity - pVel;
         Vector3 horizRelVel = new Vector3(currentRelVel.x, 0f, currentRelVel.z);
 
@@ -313,6 +413,15 @@ public class BallController : MonoBehaviour
             Vector3 clampedHorizRel = horizRel.normalized * maxSpeed;
             Vector3 velChange = clampedHorizRel - horizRel;
             rb.AddForce(velChange, ForceMode.VelocityChange);
+        }
+    }
+    
+    private void ApplyExtraGravity()
+    {
+        if (extraGravityRise > 0f || extraGravityFall > 0f)
+        {
+            float g = rb.linearVelocity.y > 0f ? extraGravityRise : extraGravityFall;
+            rb.AddForce(Vector3.down * g, ForceMode.Acceleration);
         }
     }
 }
