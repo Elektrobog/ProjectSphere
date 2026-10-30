@@ -1,7 +1,7 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
-public class RotatingColumnPhysics : MonoBehaviour
+public class RotatingColumn : MonoBehaviour
 {
     [Header("Rotation Settings")]
     public float rotationSpeed = 30f;       // скорость вращения в градусах/сек
