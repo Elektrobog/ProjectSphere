@@ -12,14 +12,14 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
     private Vector3 initialLocalOffset;
     private Quaternion initialRotation;
     private float accumulatedAngle = 0f;
-    private float angularSpeedRad;
     private bool isInitialized;
+
+    private float AngularSpeedRad => angularSpeed * Mathf.Deg2Rad;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody>();
         rb.isKinematic = true;
-        angularSpeedRad = angularSpeed * Mathf.Deg2Rad;
 
         if (rotationCenter != null)
             Initialize(rotationCenter);
@@ -52,13 +52,13 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
     {
         if (rotationCenter == null) return Vector3.zero;
         Vector3 radius = worldPoint - rotationCenter.position;
-        float omega = angularSpeedRad * (clockwise ? -1f : 1f);
+        float omega = AngularSpeedRad * (clockwise ? -1f : 1f);
         return Vector3.Cross(new Vector3(0f, omega, 0f), radius);
     }
 
     public Vector3 GetAngularVelocity()
     {
-        float omega = angularSpeedRad * (clockwise ? -1f : 1f);
+        float omega = AngularSpeedRad * (clockwise ? -1f : 1f);
         return new Vector3(0f, omega, 0f);
     }
 }
