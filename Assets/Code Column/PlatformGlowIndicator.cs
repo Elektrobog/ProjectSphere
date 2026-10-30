@@ -1,9 +1,15 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 // Заготовка на будущее: индикатор вращения платформы.
 // Динамически меняет цвет светящегося материала "GlowMat 1" на колонне:
 //   - платформа НЕ крутится -> красное свечение
 //   - платформа КРУТИТСЯ   -> зелёное свечение
+//
+// ВАЖНО ПРО МАТЕРИАЛЫ: колонна может состоять из нескольких материалов
+// (например, тело + светящиеся полосы). Скрипт меняет цвет ТОЛЬКО у слота
+// с материалом "GlowMat 1" — остальные материалы renderer'а не трогаются,
+// блок свойств ставится на конкретный индекс материала.
 //
 // Использование:
 //   1. Повесьте скрипт на колонну (или на платформу).
@@ -13,14 +19,19 @@ using UnityEngine;
 //        a) ручное управление из кода: SetRotating(true/false);
 //        b) платформа, указанная вручную в поле platform;
 //        c) все дочерние RotatingPlatform: хотя бы одна крутится -> зелёный.
-//      Это покрывает случай, когда платформы создаёт SpiralStepSpawner
-//      в рантайме — их не существует на этапе настройки сцены.
 //
 // ВАЖНО: у материала "GlowMat 1" в инспекторе должна быть включена Emission,
 // иначе свечение видно не будет. Цвет меняется через MaterialPropertyBlock,
 // поэтому копии материалов не плодятся и батчинг не ломается.
 public class PlatformGlowIndicator : MonoBehaviour
 {
+    // Пара "renderer + индекс материала GlowMat 1 на нём"
+    private class GlowTarget
+    {
+        public Renderer renderer;
+        public int materialIndex;
+    }
+
     [Header("Ссылки")]
     [Tooltip("Renderer'ы с материалом GlowMat 1. Если пусто — автопоиск по имени материала в детях")]
     public Renderer[] glowRenderers;
@@ -43,7 +54,7 @@ public class PlatformGlowIndicator : MonoBehaviour
     public float rescanInterval = 0.5f;
 
     private MaterialPropertyBlock propBlock;
-    private Renderer[] glowRenderersFound;
+    private List<GlowTarget> glowTargets = new List<GlowTarget>();
     private RotatingPlatform[] childPlatforms;
     private bool manualSet;            // кто-то вызвал SetRotating вручную — автоопределение отключается до сброса
     private bool isRotating;
@@ -53,38 +64,48 @@ public class PlatformGlowIndicator : MonoBehaviour
     private void Awake()
     {
         propBlock = new MaterialPropertyBlock();
-        if (glowRenderers == null || glowRenderers.Length == 0)
-            glowRenderersFound = FindGlowRenderers();
+
+        if (glowRenderers != null && glowRenderers.Length > 0)
+        {
+            // Ручной список renderer'ов: индекс GlowMat 1 ищем на каждом из них
+            foreach (var r in glowRenderers)
+            {
+                if (r == null) continue;
+                int idx = FindGlowMaterialIndex(r);
+                glowTargets.Add(new GlowTarget { renderer = r, materialIndex = idx });
+            }
+        }
         else
-            glowRenderersFound = glowRenderers;
+        {
+            // Автопоиск renderer'ов с материалом GlowMat 1 среди детей
+            foreach (var r in GetComponentsInChildren<Renderer>(true))
+            {
+                int idx = FindGlowMaterialIndex(r);
+                if (idx >= 0)
+                    glowTargets.Add(new GlowTarget { renderer = r, materialIndex = idx });
+            }
+        }
+
+        if (glowTargets.Count == 0)
+            Debug.LogWarning($"[PlatformGlowIndicator] Материал '{materialName}' не найден ни на одном Renderer в '{name}'.");
 
         currentColor = idleColor;
         nextScanTime = Time.time;
     }
 
-    // Автопоиск renderer'ов, у которых среди материалов есть "GlowMat 1"
-    private Renderer[] FindGlowRenderers()
+    // Возвращает индекс слота с материалом GlowMat 1 у renderer'а, либо -1
+    private int FindGlowMaterialIndex(Renderer r)
     {
-        var found = new System.Collections.Generic.List<Renderer>();
-        foreach (var r in GetComponentsInChildren<Renderer>(true))
+        var mats = r.sharedMaterials;
+        for (int i = 0; i < mats.Length; i++)
         {
-            foreach (var mat in r.sharedMaterials)
-            {
-                if (mat == null) continue;
-                // В рантайме имя материала может быть с суффиксом " (Instance)" — убираем его
-                string matName = mat.name.Replace(" (Instance)", "").Trim();
-                if (matName == materialName)
-                {
-                    found.Add(r);
-                    break;
-                }
-            }
+            var mat = mats[i];
+            if (mat == null) continue;
+            // В рантайме имя материала может быть с суффиксом " (Instance)" — убираем его
+            string matName = mat.name.Replace(" (Instance)", "").Trim();
+            if (matName == materialName) return i;
         }
-
-        if (found.Count == 0)
-            Debug.LogWarning($"[PlatformGlowIndicator] Материал '{materialName}' не найден ни на одном Renderer в '{name}'.");
-
-        return found.ToArray();
+        return -1;
     }
 
     // Публичное управление из любого кода (кнопки, триггеры):
@@ -122,13 +143,16 @@ public class PlatformGlowIndicator : MonoBehaviour
 
                 // Хоть одна дочерняя платформа крутится -> зелёный
                 isRotating = false;
-                for (int i = 0; i < childPlatforms?.Length; i++)
+                if (childPlatforms != null)
                 {
-                    if (childPlatforms[i] != null &&
-                        childPlatforms[i].GetAngularVelocity().sqrMagnitude > 0.0001f)
+                    for (int i = 0; i < childPlatforms.Length; i++)
                     {
-                        isRotating = true;
-                        break;
+                        if (childPlatforms[i] != null &&
+                            childPlatforms[i].GetAngularVelocity().sqrMagnitude > 0.0001f)
+                        {
+                            isRotating = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -137,18 +161,26 @@ public class PlatformGlowIndicator : MonoBehaviour
         Color target = isRotating ? rotatingColor : idleColor;
         currentColor = Color.Lerp(currentColor, target, Time.deltaTime * lerpSpeed);
 
-        foreach (var r in glowRenderersFound)
+        foreach (var t in glowTargets)
         {
-            if (r == null || r.sharedMaterial == null) continue;
+            var r = t.renderer;
+            if (r == null) continue;
 
-            r.GetPropertyBlock(propBlock);
+            // Материал именно того слота, который перекрашиваем
+            var mats = r.sharedMaterials;
+            if (t.materialIndex < 0 || t.materialIndex >= mats.Length) continue;
+            Material mat = mats[t.materialIndex];
+            if (mat == null) continue;
+
+            r.GetPropertyBlock(propBlock, t.materialIndex);
 
             // _BaseColor — URP, _Color — Built-in: ставим то, что есть в шейдере
-            if (r.sharedMaterial.HasProperty("_BaseColor")) propBlock.SetColor("_BaseColor", currentColor);
-            if (r.sharedMaterial.HasProperty("_Color")) propBlock.SetColor("_Color", currentColor);
-            if (r.sharedMaterial.HasProperty("_EmissionColor")) propBlock.SetColor("_EmissionColor", currentColor * emissionIntensity);
+            if (mat.HasProperty("_BaseColor")) propBlock.SetColor("_BaseColor", currentColor);
+            if (mat.HasProperty("_Color")) propBlock.SetColor("_Color", currentColor);
+            if (mat.HasProperty("_EmissionColor")) propBlock.SetColor("_EmissionColor", currentColor * emissionIntensity);
 
-            r.SetPropertyBlock(propBlock);
+            // Ставим блок ТОЛЬКО на слот GlowMat 1 — второй материал не трогаем
+            r.SetPropertyBlock(propBlock, t.materialIndex);
         }
     }
 }
