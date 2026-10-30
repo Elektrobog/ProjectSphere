@@ -1,5 +1,4 @@
 using UnityEngine;
-using System.Collections.Generic;
 
 // Заготовка на будущее: индикатор вращения платформы.
 // Динамически меняет цвет светящегося материала "GlowMat 1" на колонне:
@@ -9,10 +8,13 @@ using System.Collections.Generic;
 // Использование:
 //   1. Повесьте скрипт на колонну (или на платформу).
 //   2. Renderer'ы с материалом "GlowMat 1" найдутся автоматически в детях.
-//      Можно также заполнить список вручную в инспекторе.
-//   3. Поле platform — ссылка на RotatingPlatform: тогда состояние
-//      определяется автоматически. Если оставить пустым — управляйте
-//      вручную из любого кода: GetComponent<PlatformGlowIndicator>().SetRotating(true);
+//   3. Платформы (RotatingPlatform) тоже находятся автоматически среди детей.
+//      Порядок приоритета состояния:
+//        a) ручное управление из кода: SetRotating(true/false);
+//        b) платформа, указанная вручную в поле platform;
+//        c) все дочерние RotatingPlatform: хотя бы одна крутится -> зелёный.
+//      Это покрывает случай, когда платформы создаёт SpiralStepSpawner
+//      в рантайме — их не существует на этапе настройки сцены.
 //
 // ВАЖНО: у материала "GlowMat 1" в инспекторе должна быть включена Emission,
 // иначе свечение видно не будет. Цвет меняется через MaterialPropertyBlock,
@@ -21,8 +23,8 @@ public class PlatformGlowIndicator : MonoBehaviour
 {
     [Header("Ссылки")]
     [Tooltip("Renderer'ы с материалом GlowMat 1. Если пусто — автопоиск по имени материала в детях")]
-    public List<Renderer> glowRenderers = new List<Renderer>();
-    [Tooltip("Вращающаяся платформа. Если пусто — управление через SetRotating() из кода")]
+    public Renderer[] glowRenderers;
+    [Tooltip("Платформа вручную (перекрывает автопоиск). Если пусто — берутся все дочерние RotatingPlatform")]
     public RotatingPlatform platform;
 
     [Header("Настройки")]
@@ -37,58 +39,105 @@ public class PlatformGlowIndicator : MonoBehaviour
     [Tooltip("Скорость плавного перехода цвета")]
     [Range(0.01f, 10f)]
     public float lerpSpeed = 4f;
+    [Tooltip("Как часто (в секундах) перепроверять дочерние платформы, если их ещё нет. Нужно, потому что SpiralStepSpawner создаёт платформы в рантайме")]
+    public float rescanInterval = 0.5f;
 
     private MaterialPropertyBlock propBlock;
+    private Renderer[] glowRenderersFound;
+    private RotatingPlatform[] childPlatforms;
+    private bool manualSet;            // кто-то вызвал SetRotating вручную — автоопределение отключается до сброса
     private bool isRotating;
+    private float nextScanTime;
     private Color currentColor;
 
     private void Awake()
     {
         propBlock = new MaterialPropertyBlock();
-        if (glowRenderers.Count == 0) AutoFindRenderers();
+        if (glowRenderers == null || glowRenderers.Length == 0)
+            glowRenderersFound = FindGlowRenderers();
+        else
+            glowRenderersFound = glowRenderers;
+
         currentColor = idleColor;
+        nextScanTime = Time.time;
     }
 
     // Автопоиск renderer'ов, у которых среди материалов есть "GlowMat 1"
-    private void AutoFindRenderers()
+    private Renderer[] FindGlowRenderers()
     {
+        var found = new System.Collections.Generic.List<Renderer>();
         foreach (var r in GetComponentsInChildren<Renderer>(true))
         {
             foreach (var mat in r.sharedMaterials)
             {
                 if (mat == null) continue;
-                // В инспекторе имя материала может быть с суффиксом " (Instance)" — убираем его
+                // В рантайме имя материала может быть с суффиксом " (Instance)" — убираем его
                 string matName = mat.name.Replace(" (Instance)", "").Trim();
                 if (matName == materialName)
                 {
-                    glowRenderers.Add(r);
+                    found.Add(r);
                     break;
                 }
             }
         }
 
-        if (glowRenderers.Count == 0)
-            Debug.LogWarning($"[PlatformGlowIndicator] Материал '{materialName}' не найден ни на одном Renderer в '{name}'. Заполните список glowRenderers вручную.");
+        if (found.Count == 0)
+            Debug.LogWarning($"[PlatformGlowIndicator] Материал '{materialName}' не найден ни на одном Renderer в '{name}'.");
+
+        return found.ToArray();
     }
 
-    // Публичное управление из любого кода (кнопки, триггеры, катсцены):
-    // SetRotating(true) -> зелёный, SetRotating(false) -> красный
-    public void SetRotating(bool rotating) => isRotating = rotating;
+    // Публичное управление из любого кода (кнопки, триггеры):
+    // SetRotating(true) -> зелёный, SetRotating(false) -> красный.
+    // После ручного вызова автоопределение по платформам отключается,
+    // пока не вызвать ResetToAuto().
+    public void SetRotating(bool rotating)
+    {
+        manualSet = true;
+        isRotating = rotating;
+    }
+
+    // Вернуть автоматическое определение состояния по платформам
+    public void ResetToAuto() => manualSet = false;
 
     private void Update()
     {
-        // Если платформа задана — состояние определяется автоматически:
-        // угловая скорость ~0 (остановлена) -> красный, крутится -> зелёный
-        if (platform != null)
+        if (!manualSet)
         {
-            Vector3 av = platform.GetAngularVelocity();
-            isRotating = av.sqrMagnitude > 0.0001f;
+            if (platform != null)
+            {
+                // Ручная ссылка на платформу — приоритетнее автопоиска
+                Vector3 av = platform.GetAngularVelocity();
+                isRotating = av.sqrMagnitude > 0.0001f;
+            }
+            else
+            {
+                // Автопоиск дочерних платформ с периодическим пересканированием:
+                // SpiralStepSpawner может создать их позже, чем стартанёт этот скрипт
+                if ((childPlatforms == null || childPlatforms.Length == 0) && Time.time >= nextScanTime)
+                {
+                    childPlatforms = GetComponentsInChildren<RotatingPlatform>();
+                    nextScanTime = Time.time + rescanInterval;
+                }
+
+                // Хоть одна дочерняя платформа крутится -> зелёный
+                isRotating = false;
+                for (int i = 0; i < childPlatforms?.Length; i++)
+                {
+                    if (childPlatforms[i] != null &&
+                        childPlatforms[i].GetAngularVelocity().sqrMagnitude > 0.0001f)
+                    {
+                        isRotating = true;
+                        break;
+                    }
+                }
+            }
         }
 
         Color target = isRotating ? rotatingColor : idleColor;
         currentColor = Color.Lerp(currentColor, target, Time.deltaTime * lerpSpeed);
 
-        foreach (var r in glowRenderers)
+        foreach (var r in glowRenderersFound)
         {
             if (r == null || r.sharedMaterial == null) continue;
 
