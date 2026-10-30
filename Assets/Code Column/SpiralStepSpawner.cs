@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections.Generic;
 
 #if UNITY_EDITOR
@@ -11,44 +11,44 @@ public class SpiralStepSpawner : MonoBehaviour
     [System.Serializable]
     public class PlatformSettings
     {
-        [Header("📍 Позиция")]
+        [Header("Позиция")]
         public float height = 5f;
         public float angleOffset = 0f;
         public float customRadius = 0f;
 
-        [Header("🔄 Вращение")]
+        [Header("Вращение")]
         public bool enableRotation = true;
         public float rotationSpeed = 45f;
         public bool clockwise = true;
 
-        [Header("🎨 Визуал")]
+        [Header("Визуал")]
         public Material customMaterial;
         public Color platformColor = Color.white;
     }
 
-    [Header("🎯 ОСНОВНЫЕ НАСТРОЙКИ")]
+    [Header("ОСНОВНЫЕ НАСТРОЙКИ")]
     public GameObject platformPrefab;
 
-    [Header("📍 ЦЕНТР КОЛОННЫ")]
+    [Header("ЦЕНТР КОЛОННЫ")]
     public Transform columnCenter;
     public bool autoFindColumn = true;
     public string[] columnSearchNames = new string[] { "Column", "Column_Full", "MainColumn" };
 
-    [Header("🔄 НАСТРОЙКИ ГЕНЕРАЦИИ")]
+    [Header("НАСТРОЙКИ ГЕНЕРАЦИИ")]
     public float defaultRadius = 3.4f;
     public float rotationOffset = 0f;
     public float startAngle = 0f;
     public bool generateOnStart = true;
     public bool destroyPreviousOnGenerate = true;
 
-    [Header("📋 СПИСОК ПЛАТФОРМ")]
+    [Header("СПИСОК ПЛАТФОРМ")]
     public List<PlatformSettings> platforms = new List<PlatformSettings>();
 
-    [Header("🎨 МАТЕРИАЛЫ")]
+    [Header("МАТЕРИАЛЫ")]
     public Material defaultMaterial;
     public Color defaultColor = new Color(0.75f, 0.78f, 0.85f, 1.0f);
 
-    [Header("🔧 ДОПОЛНИТЕЛЬНО")]
+    [Header("ДОПОЛНИТЕЛЬНО")]
     public bool parentToColumn = true;
     public bool showGizmos = true;
     public Color gizmoColor = Color.cyan;
@@ -109,7 +109,7 @@ public class SpiralStepSpawner : MonoBehaviour
 
         if (platforms.Count == 0)
         {
-            Debug.LogWarning("[ПРЕДУПРЕЖДЕНИЕ] Список платформ ПУСТ! Нажми кнопку '➕ ДОБАВИТЬ ПЛАТФОРМУ' в инспекторе.");
+            Debug.LogWarning("[ПРЕДУПРЕЖДЕНИЕ] Список платформ ПУСТ! Нажми кнопку 'ДОБАВИТЬ ПЛАТФОРМУ' в инспекторе.");
             return;
         }
         Debug.Log($"[5] Платформ в списке: {platforms.Count}");
@@ -239,11 +239,11 @@ public class SpiralStepSpawnerEditor : Editor
     {
         var spawner = (SpiralStepSpawner)target;
 
-        GUILayout.Label("🎛️ SPIRAL STEP SPAWNER", EditorStyles.boldLabel);
+        GUILayout.Label("SPIRAL STEP SPAWNER", EditorStyles.boldLabel);
         GUILayout.Space(10);
 
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        GUILayout.Label("🎯 ОСНОВНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
+        GUILayout.Label("ОСНОВНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
         spawner.platformPrefab = (GameObject)EditorGUILayout.ObjectField("Platform Prefab", spawner.platformPrefab, typeof(GameObject), false);
         spawner.columnCenter = (Transform)EditorGUILayout.ObjectField("Column Center", spawner.columnCenter, typeof(Transform), true);
         spawner.generateOnStart = EditorGUILayout.Toggle("Generate On Start", spawner.generateOnStart);
@@ -253,10 +253,10 @@ public class SpiralStepSpawnerEditor : Editor
         GUILayout.Space(10);
 
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        GUILayout.Label("🔄 УПРАВЛЕНИЕ ГЕНЕРАЦИЕЙ", EditorStyles.boldLabel);
+        GUILayout.Label("УПРАВЛЕНИЕ ГЕНЕРАЦИЕЙ", EditorStyles.boldLabel);
 
         EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("🔄 СГЕНЕРИРОВАТЬ", GUILayout.Height(30)))
+        if (GUILayout.Button("СГЕНЕРИРОВАТЬ"))
         {
             foreach (var obj in targets)
             {
@@ -265,7 +265,7 @@ public class SpiralStepSpawnerEditor : Editor
                 else s.GeneratePlatforms();
             }
         }
-        if (GUILayout.Button("🗑️ ОЧИСТИТЬ", GUILayout.Height(30)))
+        if (GUILayout.Button("ОЧИСТИТЬ"))
         {
             foreach (var obj in targets)
             {
@@ -279,14 +279,14 @@ public class SpiralStepSpawnerEditor : Editor
         GUILayout.Space(10);
 
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        GUILayout.Label("📋 СПИСОК ПЛАТФОРМ", EditorStyles.boldLabel);
+        GUILayout.Label("СПИСОК ПЛАТФОРМ", EditorStyles.boldLabel);
 
         EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("➕ ДОБАВИТЬ ПЛАТФОРМУ"))
+        if (GUILayout.Button("ДОБАВИТЬ ПЛАТФОРМУ"))
         {
             spawner.AddPlatform();
         }
-        if (GUILayout.Button("🗑️ ОЧИСТИТЬ СПИСОК"))
+        if (GUILayout.Button("ОЧИСТИТЬ СПИСОК"))
         {
             spawner.ClearPlatformList();
         }
@@ -308,7 +308,7 @@ public class SpiralStepSpawnerEditor : Editor
             p.clockwise = EditorGUILayout.Toggle("Clockwise", p.clockwise);
             p.customMaterial = (Material)EditorGUILayout.ObjectField("Custom Material", p.customMaterial, typeof(Material), false);
 
-            if (GUILayout.Button("❌ Удалить"))
+            if (GUILayout.Button("Удалить"))
             {
                 spawner.platforms.RemoveAt(i);
                 break;
@@ -321,7 +321,7 @@ public class SpiralStepSpawnerEditor : Editor
         GUILayout.Space(10);
 
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        GUILayout.Label("⚙️ ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
+        GUILayout.Label("ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
         spawner.defaultRadius = EditorGUILayout.FloatField("Default Radius", spawner.defaultRadius);
         spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset", spawner.rotationOffset);
         spawner.startAngle = EditorGUILayout.FloatField("Start Angle", spawner.startAngle);
