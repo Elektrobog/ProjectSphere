@@ -8,6 +8,14 @@ using UnityEditor;
 [AddComponentMenu("Custom/Spiral Step Spawner")]
 public class SpiralStepSpawner : MonoBehaviour
 {
+    // Правило вращения для всех создаваемых платформ
+    public enum RotationMode
+    {
+        PerPlatform,  // по галочке Enable Rotation у каждой платформы
+        AllRotate,    // все платформы крутятся
+        NoneRotate    // все платформы стоят
+    }
+
     [System.Serializable]
     public class PlatformSettings
     {
@@ -28,6 +36,10 @@ public class SpiralStepSpawner : MonoBehaviour
 
     [Header("ОСНОВНЫЕ НАСТРОЙКИ")]
     public GameObject platformPrefab;
+
+    [Header("ВРАЩЕНИЕ ПЛАТФОРМ")]
+    [Tooltip("Per Platform — по галочке Enable Rotation у каждой платформы; All Rotate — все платформы крутятся; None Rotate — все стоят (галочки у платформ игнорируются)")]
+    public RotationMode rotationMode = RotationMode.PerPlatform;
 
     [Header("ЦЕНТР КОЛОННЫ")]
     public Transform columnCenter;
@@ -76,6 +88,17 @@ public class SpiralStepSpawner : MonoBehaviour
 
     [ContextMenu("Generate Platforms")]
     public void GeneratePlatforms() => GeneratePlatformsInternal(true);
+
+    // Итоговое решение, крутится ли платформа: глобальный режим приоритетнее галочки
+    private bool ShouldRotate(PlatformSettings settings)
+    {
+        switch (rotationMode)
+        {
+            case RotationMode.AllRotate: return true;
+            case RotationMode.NoneRotate: return false;
+            default: return settings.enableRotation;
+        }
+    }
 
     private void GeneratePlatformsInternal(bool destroyImmediate)
     {
@@ -168,7 +191,7 @@ public class SpiralStepSpawner : MonoBehaviour
             if (settings.customMaterial != null) meshRenderer.sharedMaterial = settings.customMaterial;
             else if (defaultMaterial != null) meshRenderer.sharedMaterial = defaultMaterial;
 
-            if (settings.enableRotation)
+            if (ShouldRotate(settings))
             {
                 RotatingPlatform rotating = platformObj.GetComponent<RotatingPlatform>();
                 if (rotating == null) rotating = platformObj.AddComponent<RotatingPlatform>();
@@ -248,6 +271,7 @@ public class SpiralStepSpawnerEditor : Editor
         spawner.columnCenter = (Transform)EditorGUILayout.ObjectField("Column Center", spawner.columnCenter, typeof(Transform), true);
         spawner.generateOnStart = EditorGUILayout.Toggle("Generate On Start", spawner.generateOnStart);
         spawner.destroyPreviousOnGenerate = EditorGUILayout.Toggle("Destroy Previous On Generate", spawner.destroyPreviousOnGenerate);
+        spawner.rotationMode = (SpiralStepSpawner.RotationMode)EditorGUILayout.EnumPopup("Rotation Mode", spawner.rotationMode);
         EditorGUILayout.EndVertical();
 
         GUILayout.Space(10);
@@ -303,7 +327,12 @@ public class SpiralStepSpawnerEditor : Editor
             p.height = EditorGUILayout.FloatField("Height", p.height);
             p.angleOffset = EditorGUILayout.FloatField("Angle Offset", p.angleOffset);
             p.customRadius = EditorGUILayout.FloatField("Custom Radius", p.customRadius);
-            p.enableRotation = EditorGUILayout.Toggle("Enable Rotation", p.enableRotation);
+            // Галочка Enable Rotation показывается только в режиме Per Platform —
+            // в глобальных режимах её состояние игнорируется
+            if (spawner.rotationMode == SpiralStepSpawner.RotationMode.PerPlatform)
+            {
+                p.enableRotation = EditorGUILayout.Toggle("Enable Rotation", p.enableRotation);
+            }
             p.rotationSpeed = EditorGUILayout.FloatField("Rotation Speed", p.rotationSpeed);
             p.clockwise = EditorGUILayout.Toggle("Clockwise", p.clockwise);
             p.customMaterial = (Material)EditorGUILayout.ObjectField("Custom Material", p.customMaterial, typeof(Material), false);
