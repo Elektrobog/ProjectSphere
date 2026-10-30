@@ -53,10 +53,17 @@ public class BallController : MonoBehaviour
     [Tooltip("Максимальная скорость коррекции позиции — ограничивает рывки")]
     public float anchorMaxCorrectionSpeed = 5f;
 
+    [Header("Centrifugal Drift (Снос с быстрой вращающейся платформы)")]
+    [Tooltip("Множитель центробежного сноса: 1.0 = честная физика, 0.7 = мягкий режим с запасом на ошибку, 0 = выключено")]
+    [Range(0f, 1f)]
+    public float centrifugalDriftFactor = 0.7f;
+    [Tooltip("Предел сцепления (м/с²). Пока центробежное ускорение (ω²·R) ниже — шар надёжно держится на платформе; выше — якорь отпускает и шар сносится наружу")]
+    public float centrifugalGripLimit = 5f;
+
     [Header("Air Control")]
     [Tooltip("Множитель силы управления в воздухе от torqueStrength")]
     [Range(0f, 1f)] public float airControlFactor = 0.2f;
-    [Tooltip("Сила (м/с²) для управления в воздухе через AddForce")]
+    [Tooltip("Сила (м/с²) для управления в воздухе через AddForce")]
     public float airControlForce = 20f;
     
     [Tooltip("Дополнительный множитель для воздуха при движении по склонам")]
@@ -316,9 +323,40 @@ public class BallController : MonoBehaviour
                 float currentVelSmoothTime = Mathf.Lerp(gripSmoothTimeStart, gripSmoothTimeMax, rampT);
                 float currentRotSmoothTime = Mathf.Lerp(rotationSmoothTimeStart, rotationSmoothTimeMax, rampT);
 
+                // --- Центробежный снос (вращающиеся платформы) ---
+                // Реальная физика: шар держится трением покоя, пока ω²·R не превысит
+                // предел трения. Ниже предела якорь надёжно держит шар (снос выключен).
+                // Выше предела якорь отпускает, и шар плавно сносится наружу.
+                Vector3 centrifugalDir = Vector3.zero;
+                float centrifugalAccel = 0f;
+                if (centrifugalDriftFactor > 0f && pAngVel.sqrMagnitude > 0.0001f)
+                {
+                    // Радиальный вектор от оси вращения к шару: r = (v × ω) / |ω|²
+                    Vector3 radial = Vector3.Cross(pVel, pAngVel) / pAngVel.sqrMagnitude;
+                    float radius = radial.magnitude;
+                    if (radius > 0.05f)
+                    {
+                        centrifugalAccel = pAngVel.sqrMagnitude * radius; // ω²·R
+                        if (centrifugalAccel * centrifugalDriftFactor > centrifugalGripLimit)
+                        {
+                            centrifugalDir = radial / radius; // наружу от оси вращения
+                        }
+                        else
+                        {
+                            centrifugalAccel = 0f; // ниже предела сцепления — шар держится
+                        }
+                    }
+                }
+
                 // --- Позиционный якорь ---
+                // Якорь отключается, если: 1) платформа крутится так быстро, что
+                // центробежный снос превышает предел сцепления; 2) склон круче
+                // maxSlopeAngle — там за скатывание отвечает BallSlopeSlide.
+                bool anchorAllowed = centrifugalDir == Vector3.zero
+                    && ground.GroundAngle <= slopeSlide.maxSlopeAngle;
+
                 Vector3 anchorCorrectionVel = Vector3.zero;
-                if (rampT >= 1f)
+                if (rampT >= 1f && anchorAllowed)
                 {
                     if (!hasAnchor && activePlatformTransform != null)
                     {
@@ -341,6 +379,12 @@ public class BallController : MonoBehaviour
                 else
                 {
                     hasAnchor = false;
+                }
+
+                // Снос наружу — только когда центробежное ускорение превысило предел сцепления
+                if (centrifugalDir != Vector3.zero)
+                {
+                    rb.AddForce(centrifugalDir * (centrifugalAccel * centrifugalDriftFactor), ForceMode.Acceleration);
                 }
 
                 // Корректируем скорость через AddForce (VelocityChange),
