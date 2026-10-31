@@ -5,6 +5,15 @@ using System.Collections.Generic;
 using UnityEditor;
 #endif
 
+/// <summary>
+/// Метка "эта платформа создана спавнером". Кладётся на КАЖДУЮ сгенерированную
+/// платформу (и на вращающиеся, и на стоящие) и сохраняется в сцене — по ней
+/// спавнер находит свои платформы после Play и переоткрытия сцены.
+/// </summary>
+public class SpiralPlatformMarker : MonoBehaviour
+{
+}
+
 [AddComponentMenu("Custom/Spiral Step Spawner")]
 public class SpiralStepSpawner : MonoBehaviour
 {
@@ -81,7 +90,23 @@ public class SpiralStepSpawner : MonoBehaviour
     private void Start()
     {
         if (autoFindColumn) columnCenter = FindColumnCenter();
-        if (generateOnStart) GeneratePlatformsInternal(false);
+        if (generateOnStart)
+        {
+            // Если платформы уже сгенерированы в редакторе (или стоят в сцене) —
+            // НЕ спавним дубликаты, а принимаем существующие в учёт
+            List<GameObject> existing = new List<GameObject>();
+            CollectPlatformObjects(FindColumnCenter(), existing);
+            existing.RemoveAll(p => p == null);
+            if (existing.Count > 0)
+            {
+                spawnedPlatforms.AddRange(existing);
+                Debug.Log($"[Спавнер] На колонне уже есть {existing.Count} платформ — повторная генерация пропущена.");
+            }
+            else
+            {
+                GeneratePlatformsInternal(false);
+            }
+        }
     }
 
     public void GeneratePlatformsRuntime() => GeneratePlatformsInternal(false);
@@ -155,6 +180,14 @@ public class SpiralStepSpawner : MonoBehaviour
             if (!Application.isPlaying) Undo.RegisterCreatedObjectUndo(platformObj, "Generate Platform");
 #endif
 
+            // Метка спавнера — на КАЖДУЮ платформу, даже на стоящую:
+            // раньше стоящие платформы нельзя было найти (у них нет RotatingPlatform)
+            // и они дублировались при Play
+            if (platformObj.GetComponent<SpiralPlatformMarker>() == null)
+            {
+                platformObj.AddComponent<SpiralPlatformMarker>();
+            }
+
             Renderer meshRenderer = platformObj.GetComponentInChildren<Renderer>();
             if (meshRenderer == null)
             {
@@ -212,6 +245,26 @@ public class SpiralStepSpawner : MonoBehaviour
 
     private void ClearPlatforms(bool destroyImmediate)
     {
+        // Уничтожаем ВСЕ платформы-дети колонны, а не только запомненные в списке:
+        // список не сериализуется, и после Play / переоткрытия сцены он пуст
+        Transform center = FindColumnCenter();
+        if (center != null)
+        {
+            List<GameObject> found = new List<GameObject>();
+            CollectPlatformObjects(center, found);
+            foreach (GameObject obj in found)
+            {
+                if (obj == null) continue;
+#if UNITY_EDITOR
+                if (!Application.isPlaying) Undo.DestroyObjectImmediate(obj);
+                else
+#endif
+                    if (destroyImmediate) DestroyImmediate(obj);
+                    else Destroy(obj);
+            }
+        }
+
+        // Подстраховка: платформы из списка, потерявшие родителя
         foreach (var platform in spawnedPlatforms)
         {
             if (platform != null)
@@ -225,6 +278,23 @@ public class SpiralStepSpawner : MonoBehaviour
             }
         }
         spawnedPlatforms.Clear();
+    }
+
+    // Все платформы-дети колонны (даже не попавшие в список — сгенерированные раньше).
+    // Ищем по метке спавнера ИЛИ по RotatingPlatform — покрываем и старые платформы,
+    // созданные до появления метки
+    private void CollectPlatformObjects(Transform root, List<GameObject> list)
+    {
+        foreach (Transform child in root)
+        {
+            if (child.GetComponent<SpiralPlatformMarker>() != null ||
+                child.GetComponent<RotatingPlatform>() != null)
+            {
+                list.Add(child.gameObject);
+                continue; // под платформу не заходим
+            }
+            CollectPlatformObjects(child, list);
+        }
     }
 
     [ContextMenu("Add Platform")]
