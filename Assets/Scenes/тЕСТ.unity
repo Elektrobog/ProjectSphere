@@ -802,6 +802,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4596482899780493526, guid: 1278f276dbdcd8f4fa97c07357f97065, type: 3}
       insertIndex: -1
       addedObject: {fileID: 980244606}
+    - targetCorrespondingSourceObject: {fileID: 4596482899780493526, guid: 1278f276dbdcd8f4fa97c07357f97065, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 980244609}
   m_SourcePrefab: {fileID: 100100000, guid: 1278f276dbdcd8f4fa97c07357f97065, type: 3}
 --- !u!1 &980244604 stripped
 GameObject:
@@ -826,6 +829,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpiralStepSpawner
   platformPrefab: {fileID: 1711225138979225855, guid: 8430359bcb394ce409f0a29af892a23a, type: 3}
+  rotationMode: 0
   columnCenter: {fileID: 980244605}
   autoFindColumn: 1
   columnSearchNames:
@@ -851,6 +855,26 @@ MonoBehaviour:
   parentToColumn: 1
   showGizmos: 1
   gizmoColor: {r: 0, g: 1, b: 1, a: 1}
+--- !u!114 &980244609
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 980244604}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd8074d4b88bbee44af8afd675961ab7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlatformGlowIndicator
+  glowRenderers: []
+  platform: {fileID: 0}
+  materialName: GlowMat 1
+  idleColor: {r: 1, g: 0.1, b: 0.05, a: 1}
+  rotatingColor: {r: 0.1, g: 1, b: 0.2, a: 1}
+  emissionIntensity: 2.5
+  lerpSpeed: 4
+  rescanInterval: 0.5
 --- !u!1001 &1257922596
 PrefabInstance:
   m_ObjectHideFlags: 0
