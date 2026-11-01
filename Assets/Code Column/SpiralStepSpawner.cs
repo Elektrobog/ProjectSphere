@@ -189,9 +189,10 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             var settings = platforms[i];
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
-            float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition + zeroAngleDirection;
+            float positionAngle = startAngle + settings.spawnPosition + zeroAngleDirection;
+            float rotationAngle = startAngle + settings.angleOffset + zeroAngleDirection;
 
-            Quaternion spawnRotation = center.rotation * Quaternion.Euler(0f, 0f, -positionAngle + 90f + rotationOffset);
+            Quaternion spawnRotation = center.rotation * Quaternion.Euler(0f, 0f, -rotationAngle + 90f + rotationOffset);
 
             // Спавним префаб
             GameObject platformObj = Instantiate(platformPrefab, worldCenter, spawnRotation);
@@ -388,7 +389,7 @@ public class SpiralStepSpawner : MonoBehaviour
         foreach (var settings in platforms)
         {
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
-            float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition + zeroAngleDirection;
+            float positionAngle = startAngle + settings.spawnPosition + zeroAngleDirection;
             Vector3 outwardLocal = new Vector3(Mathf.Cos(positionAngle * Mathf.Deg2Rad), Mathf.Sin(positionAngle * Mathf.Deg2Rad), 0f);
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
             Vector3 pos = center.position + outwardWorld * effectiveRadius + Vector3.up * settings.height;
