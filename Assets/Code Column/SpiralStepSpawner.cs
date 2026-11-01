@@ -475,6 +475,7 @@ public class SpiralStepSpawnerEditor : Editor
             p.height = EditorGUILayout.FloatField("Height", p.height);
             p.angleOffset = EditorGUILayout.FloatField("Angle Offset", p.angleOffset);
             p.customRadius = EditorGUILayout.FloatField("Custom Radius", p.customRadius);
+            p.spawnPosition = EditorGUILayout.Slider("Spawn Position", p.spawnPosition, 0f, 360f);
             // Галочка Enable Rotation показывается только в режиме Per Platform —
             // в глобальных режимах её состояние игнорируется
             if (spawner.rotationMode == SpiralStepSpawner.RotationMode.PerPlatform)
