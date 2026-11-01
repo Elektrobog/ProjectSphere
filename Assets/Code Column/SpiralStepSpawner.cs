@@ -316,7 +316,10 @@ public class SpiralStepSpawner : MonoBehaviour
     }
 
     // Строит цилиндр-коллайдер по верхней поверхности платформы.
-    // Радиус берём из вершин меша, находящихся в верхних 10% высоты, и сжимаем на 2%.
+    // ВСЁ считается относительно ЦЕНТРА ГАБАРИТОВ меша (mesh.bounds.center),
+    // а не локального нуля: у FBX-моделей пивот часто стоит в стороне
+    // (например, в центре сцены), и расчёт от нуля давал гигантские
+    // "случайные" коллайдеры. Здесь это не влияет на результат.
     private bool TryAddTopDiscCollider(GameObject platformObj, int index)
     {
         MeshFilter mf = platformObj.GetComponentInChildren<MeshFilter>();
@@ -327,45 +330,49 @@ public class SpiralStepSpawner : MonoBehaviour
         try { vertices = mesh.vertices; }
         catch { return false; } // меш без Read/Write — уходим в Convex Mesh
 
-        // Верхняя поверхность: вершины в верхних 10% высоты меша (в локальных координатах меша)
         Bounds mb = mesh.bounds;
+        Vector3 c = mb.center; // центр габаритов в локальных координатах меша
+
+        // Верхняя поверхность: вершины в верхних 10% высоты меша
         float yTop = mb.max.y - mb.size.y * 0.10f;
         float radius = 0f;
         bool found = false;
         foreach (Vector3 v in vertices)
         {
             if (v.y < yTop) continue;
-            float r = Mathf.Sqrt(v.x * v.x + v.z * v.z);
+            float dx = v.x - c.x;
+            float dz = v.z - c.z;
+            float r = Mathf.Sqrt(dx * dx + dz * dz);
             if (!found || r > radius) { radius = r; found = true; }
         }
         if (!found || radius < 0.05f) return false;
 
         radius *= 0.98f; // небольшой запас внутрь, чтобы шар отпускался у самого края
 
-        Mesh cylinder = BuildCylinderMesh(radius, mb.min.y, mb.max.y, 20);
+        Mesh cylinder = BuildCylinderMesh(c.x, c.z, radius, mb.min.y, mb.max.y, 20);
         MeshCollider mc = mf.gameObject.AddComponent<MeshCollider>();
         mc.sharedMesh = cylinder;
         mc.convex = true;
-        Debug.Log($"[Спавнер] Платформе #{index} добавлен цилиндр-коллайдер Top Disc (радиус {radius:F2}).");
+        Debug.Log($"[Спавнер] Платформе #{index} добавлен цилиндр-коллайдер Top Disc (центр меша локально: {c.x:F2}, {c.z:F2}; радиус {radius:F2}).");
         return true;
     }
 
-    // Низкополигональный цилиндр для convex MeshCollider
-    private Mesh BuildCylinderMesh(float radius, float y0, float y1, int segments)
+    // Низкополигональный цилиндр вокруг точки (cx, cz) для convex MeshCollider
+    private Mesh BuildCylinderMesh(float cx, float cz, float radius, float y0, float y1, int segments)
     {
         Vector3[] verts = new Vector3[segments * 2 + 2];
         for (int i = 0; i < segments; i++)
         {
             float a = i / (float)segments * Mathf.PI * 2f;
-            float x = Mathf.Cos(a) * radius;
-            float z = Mathf.Sin(a) * radius;
+            float x = cx + Mathf.Cos(a) * radius;
+            float z = cz + Mathf.Sin(a) * radius;
             verts[i] = new Vector3(x, y0, z);
             verts[i + segments] = new Vector3(x, y1, z);
         }
         int bottomCenter = segments * 2;
         int topCenter = bottomCenter + 1;
-        verts[bottomCenter] = new Vector3(0f, y0, 0f);
-        verts[topCenter] = new Vector3(0f, y1, 0f);
+        verts[bottomCenter] = new Vector3(cx, y0, cz);
+        verts[topCenter] = new Vector3(cx, y1, cz);
 
         int[] tris = new int[segments * 6];
         int t = 0;
