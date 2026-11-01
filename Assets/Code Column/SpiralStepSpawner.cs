@@ -90,6 +90,11 @@ public class SpiralStepSpawner : MonoBehaviour
     public bool showGizmos = true;
     public Color gizmoColor = Color.cyan;
 
+    [Header("\u041d\u0410\u0441\u0442\u0440\u043e\u0439\u043a\u0430 \u0441\u043f\u0438\u0440\u0430\u043b\u0438")]
+    [Tooltip("\u0413\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u044b\u0439 \u043f\u043e\u0432\u043e\u0440\u043e\u0442 \u0432\u0441\u0435\u0439 \u0441\u043f\u0438\u0440\u0430\u043b\u0438 (\u0432 \u0433\u0440\u0430\u0434\u0443\u0441\u0430\u0445). 0 = \u0432\u043f\u0440\u0430\u0432\u043e (X+), 90 = \u0432\u0432\u0435\u0440\u0445, 180 = \u0432\u043b\u0435\u0432\u043e (X-), 270 = \u0432\u043d\u0438\u0437")]
+    [Range(0f, 360f)]
+    public float zeroAngleDirection = 0f;
+
     private List<GameObject> spawnedPlatforms = new List<GameObject>();
 
     private Transform FindColumnCenter()
@@ -184,8 +189,8 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             var settings = platforms[i];
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
-            float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition;
-            float rotationAngle = startAngle + settings.angleOffset;
+            float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition + zeroAngleDirection;
+            float rotationAngle = startAngle + settings.angleOffset + zeroAngleDirection;
 
             Quaternion spawnRotation = center.rotation * Quaternion.Euler(0f, -rotationAngle + 90f + rotationOffset, 0f);
 
@@ -384,7 +389,7 @@ public class SpiralStepSpawner : MonoBehaviour
         foreach (var settings in platforms)
         {
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
-            float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition;
+            float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition + zeroAngleDirection;
             Vector3 outwardLocal = new Vector3(Mathf.Cos(positionAngle * Mathf.Deg2Rad), 0f, Mathf.Sin(positionAngle * Mathf.Deg2Rad));
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
             Vector3 pos = center.position + outwardWorld * effectiveRadius + Vector3.up * settings.height;
@@ -504,6 +509,7 @@ public class SpiralStepSpawnerEditor : Editor
         spawner.defaultRadius = EditorGUILayout.FloatField("Default Radius", spawner.defaultRadius);
         spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset", spawner.rotationOffset);
         spawner.startAngle = EditorGUILayout.FloatField("Start Angle", spawner.startAngle);
+        spawner.zeroAngleDirection = EditorGUILayout.Slider("Zero Angle Direction", spawner.zeroAngleDirection, 0f, 360f);
         spawner.autoFindColumn = EditorGUILayout.Toggle("Auto Find Column", spawner.autoFindColumn);
         spawner.parentToColumn = EditorGUILayout.Toggle("Parent To Column", spawner.parentToColumn);
         spawner.defaultMaterial = (Material)EditorGUILayout.ObjectField("Default Material", spawner.defaultMaterial, typeof(Material), false);
