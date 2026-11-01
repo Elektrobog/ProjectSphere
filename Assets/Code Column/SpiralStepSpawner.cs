@@ -40,25 +40,6 @@ public class SpiralStepSpawner : MonoBehaviour
         YZ   // Вертикальная
     }
 
-    // Какая локальная ось префаба — его «перед» (именно она должна смотреть от колонны)
-    public enum FrontAxis
-    {
-        PlusZ,  // Вперёд (Z+)
-        MinusZ, // Назад (Z-)
-        PlusY,  // Вверх (Y+)
-        MinusY, // Вниз (Y-)
-        PlusX,  // Вправо (X+)
-        MinusX  // Влево (X-)
-    }
-
-    // Как поворачивать платформу при спавне относительно колонны
-    public enum OrientationMode
-    {
-        PrefabAsIs,     // Ровно тот поворот, что сохранён в префабе — одинаковый на всех углах
-        FlatFrontOut,   // Плашмя (как префаб), разворот вокруг вертикали «носом» от колонны
-        FrontFromColumn // «Нос» всегда строго от колонны в точке спавна — пересчёт на КАЖДОМ угле (по умолчанию)
-    }
-
     [System.Serializable]
     public class PlatformSettings
     {
@@ -99,13 +80,10 @@ public class SpiralStepSpawner : MonoBehaviour
 
     [Header("НАСТРОЙКИ ГЕНЕРАЦИИ")]
     public float defaultRadius = 3.4f;
-    [Tooltip("Доворот платформ. В режиме «Нос от колонны» — доворот вокруг направления «от колонны», нос остаётся направленным наружу. В режиме «Точно как префаб» — поворот ВСЕХ платформ сразу вокруг вертикальной оси.")]
+    [Tooltip("Поворот САМОЙ платформы вокруг своей оси (не влияет на позицию на окружности)")]
     public float rotationOffset = 0f;
     public bool generateOnStart = true;
     public bool destroyPreviousOnGenerate = true;
-
-    [Tooltip("Автопересчёт: любое изменение настроек в инспекторе (в том числе Start Angle) сразу пересоздаёт все платформы — кнопка СГЕНЕРИРОВАТЬ не нужна. Работает в редакторе вне Play.")]
-    public bool autoRegenerate = true;
 
     [Header("СПИСОК ПЛАТФОРМ")]
     public List<PlatformSettings> platforms = new List<PlatformSettings>();
@@ -122,12 +100,6 @@ public class SpiralStepSpawner : MonoBehaviour
     [Header("Плоскость вращения")]
     [Tooltip("Выберите плоскость, в которой будут располагаться платформы")]
     public SpiralStepSpawner.RotationPlane rotationPlane = SpiralStepSpawner.RotationPlane.XZ;
-
-    [Tooltip("Какая ось префаба — его «нос». Выбирается ОДИН РАЗ: в режиме «Нос от колонны» нос всегда смотрит от колонны при ЛЮБОМ угле (0, 90, 91, 180...). Если платформа повёрнута не той стороной — поменяй ось, подействует сразу на все углы.")]
-    public FrontAxis frontAxis = FrontAxis.PlusZ;
-
-    [Tooltip("Нос от колонны (по умолчанию) — платформа всегда спавнится «носом» строго от колонны в своей точке: меняешь Start Angle — позиция и поворот пересчитываются заново. Плашмя — платформа лежит горизонтально и только разворачивается вокруг вертикали. Точно как префаб — поворот не зависит от угла, все платформы одинаковые.")]
-    public OrientationMode orientationMode = OrientationMode.FrontFromColumn;
 
     private List<GameObject> spawnedPlatforms = new List<GameObject>();
 
@@ -169,10 +141,6 @@ public class SpiralStepSpawner : MonoBehaviour
     [ContextMenu("Generate Platforms")]
     public void GeneratePlatforms() => GeneratePlatformsInternal(true);
 
-    // Автопересчёт из редактора: без логов, чтобы консоль не засорялась
-    // при перетаскивании слайдеров в инспекторе
-    public void RegenerateQuiet() => GeneratePlatformsInternal(true, false);
-
     // Итоговое решение, крутится ли платформа: глобальный режим приоритетнее галочки
     private bool ShouldRotate(PlatformSettings settings)
     {
@@ -194,92 +162,40 @@ public class SpiralStepSpawner : MonoBehaviour
         return Mathf.Repeat(settings.spawnPosition, 360f);
     }
 
-    // Нормаль выбранной плоскости = ось орбиты вокруг колонны для этой плоскости.
-    // XZ — ось Y, XY — ось Z (на камеру), YZ — ось X.
-    private Vector3 GetPlaneNormal()
-    {
-        switch (rotationPlane)
-        {
-            case SpiralStepSpawner.RotationPlane.XY: return Vector3.forward;
-            case SpiralStepSpawner.RotationPlane.YZ: return Vector3.right;
-            default: return Vector3.up;
-        }
-    }
-
-    // Возвращает направление «наружу от колонны» и поворот платформы.
-    // Поворот зависит от OrientationMode: «плашмя» — платформа лежит как префаб
-    // (параллельно полу) и только разворачивается вокруг вертикали «носом»
-    // от колонны; «точно как префаб» — без всякого поворота; «нос от колонны» —
-    // LookRotation, перед строго наружу (лопасть колеса).
+    // Возвращает вектор и вращение в зависимости от выбранной плоскости
     private void GetPlaneVectors(float angle, out Vector3 outwardLocal, out Quaternion rotation)
     {
-        Vector3 upHint;
         switch (rotationPlane)
         {
             case SpiralStepSpawner.RotationPlane.XZ:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
-                upHint = Vector3.up;
+                rotation = Quaternion.Euler(0f, -angle + 90f + rotationOffset, 0f);
                 break;
             case SpiralStepSpawner.RotationPlane.XY:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad), 0f);
-                upHint = Vector3.back; // верх платформы смотрит в -Z (на стандартную камеру)
+                rotation = Quaternion.Euler(0f, 0f, -angle + 90f + rotationOffset);
                 break;
             case SpiralStepSpawner.RotationPlane.YZ:
                 outwardLocal = new Vector3(0f, Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad));
-                upHint = Vector3.right;
+                rotation = Quaternion.Euler(-angle + 90f + rotationOffset, 0f, 0f);
                 break;
             default:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
-                upHint = Vector3.up;
-                break;
-        }
-
-        // 1) Разворот префаба: выбранная ось-«перед» приводится к локальной оси Z
-        Quaternion frontCorrection;
-        switch (frontAxis)
-        {
-            case SpiralStepSpawner.FrontAxis.MinusZ: frontCorrection = Quaternion.Euler(0f, 180f, 0f); break;
-            case SpiralStepSpawner.FrontAxis.PlusY: frontCorrection = Quaternion.Euler(90f, 0f, 0f); break;
-            case SpiralStepSpawner.FrontAxis.MinusY: frontCorrection = Quaternion.Euler(-90f, 0f, 0f); break;
-            case SpiralStepSpawner.FrontAxis.PlusX: frontCorrection = Quaternion.Euler(0f, -90f, 0f); break;
-            case SpiralStepSpawner.FrontAxis.MinusX: frontCorrection = Quaternion.Euler(0f, 90f, 0f); break;
-            default: frontCorrection = Quaternion.identity; break; // PlusZ
-        }
-
-        switch (orientationMode)
-        {
-            case OrientationMode.FlatFrontOut:
-                // Платформа лежит ПЛАШМЯ (параллельно полу, как префаб) и только
-                // разворачивается вокруг вертикальной оси «носом» от колонны.
-                // При смене Start Angle платформа НЕ наклоняется — просто поворачивается.
-                rotation = Quaternion.Euler(0f, 90f - angle + rotationOffset, 0f) * frontCorrection;
-                break;
-
-            case OrientationMode.PrefabAsIs:
-                // Поворот берётся прямо из префаба (см. GeneratePlatformsInternal) —
-                // платформа спавнится ровно так, как лежит сам префаб
-                rotation = Quaternion.identity;
-                break;
-
-            default: // FrontFromColumn — «нос от колонны», как лопасть колеса
-                Quaternion facing = Quaternion.LookRotation(outwardLocal, upHint);
-                // Rotation Offset — доворот ВОКРУГ направления от колонны:
-                // «перед» остаётся направленным от колонны при любом значении
-                rotation = Quaternion.AngleAxis(rotationOffset, outwardLocal) * facing * frontCorrection;
+                rotation = Quaternion.Euler(0f, -angle + 90f + rotationOffset, 0f);
                 break;
         }
     }
 
-    private void GeneratePlatformsInternal(bool destroyImmediate, bool verbose = true)
+    private void GeneratePlatformsInternal(bool destroyImmediate)
     {
-        if (verbose) Debug.Log("=== [1] НАЧАЛО ГЕНЕРАЦИИ ===");
+        Debug.Log("=== [1] НАЧАЛО ГЕНЕРАЦИИ ===");
 
         if (platformPrefab == null)
         {
             Debug.LogError("[ОШИБКА] Префаб платформы (Platform Prefab) НЕ НАЗНАЧЕН в инспекторе!");
             return;
         }
-        if (verbose) Debug.Log($"[2] Префаб назначен: {platformPrefab.name}");
+        Debug.Log($"[2] Префаб назначен: {platformPrefab.name}");
 
         Transform center = FindColumnCenter();
         if (center == null)
@@ -287,7 +203,7 @@ public class SpiralStepSpawner : MonoBehaviour
             Debug.LogError("[ОШИБКА] Колонна (Column Center) не найдена!");
             return;
         }
-        if (verbose) Debug.Log($"[3] Колонна найдена: {center.name}");
+        Debug.Log($"[3] Колонна найдена: {center.name}");
 
 #if UNITY_EDITOR
         if (!Application.isPlaying && UnityEditor.PrefabUtility.IsPartOfPrefabAsset(center.gameObject))
@@ -296,7 +212,7 @@ public class SpiralStepSpawner : MonoBehaviour
             return;
         }
 #endif
-        if (verbose) Debug.Log("[4] Проверка на префаб-ассет пройдена.");
+        Debug.Log("[4] Проверка на префаб-ассет пройдена.");
 
         if (destroyPreviousOnGenerate) ClearPlatforms(destroyImmediate);
 
@@ -305,7 +221,7 @@ public class SpiralStepSpawner : MonoBehaviour
             Debug.LogWarning("[ПРЕДУПРЕЖДЕНИЕ] Список платформ ПУСТ! Нажми кнопку 'ДОБАВИТЬ ПЛАТФОРМУ' в инспекторе.");
             return;
         }
-        if (verbose) Debug.Log($"[5] Платформ в списке: {platforms.Count}");
+        Debug.Log($"[5] Платформ в списке: {platforms.Count}");
 
         Vector3 worldCenter = center.position;
 
@@ -318,13 +234,7 @@ public class SpiralStepSpawner : MonoBehaviour
             Vector3 outwardLocal;
             Quaternion localRotation;
             GetPlaneVectors(positionAngle, out outwardLocal, out localRotation);
-            // «Точно как префаб»: платформа спавнится ровно с тем поворотом,
-            // с которым сохранён сам префаб, плюс один общий доворот (Rotation Offset)
-            // вокруг вертикали. Никакой зависимости от угла и колонны — настроил
-            // раз, и все платформы на всех колоннах стоят одинаково.
-            Quaternion spawnRotation = orientationMode == OrientationMode.PrefabAsIs
-                ? Quaternion.Euler(0f, rotationOffset, 0f) * platformPrefab.transform.rotation
-                : center.rotation * localRotation;
+            Quaternion spawnRotation = center.rotation * localRotation;
 
             // Спавним префаб
             GameObject platformObj = Instantiate(platformPrefab, worldCenter, spawnRotation);
@@ -399,24 +309,16 @@ public class SpiralStepSpawner : MonoBehaviour
             {
                 RotatingPlatform rotating = platformObj.GetComponent<RotatingPlatform>();
                 if (rotating == null) rotating = platformObj.AddComponent<RotatingPlatform>();
-                // Ось орбиты = нормаль плоскости: в XY платформы крутятся вокруг Z
-                // (вертикальное «колесо»), в XZ — вокруг Y, как раньше
-                rotating.rotationAxis = GetPlaneNormal();
-                // «Точно как префаб» — платформа всегда держит поворот префаба.
-                // В вертикальных плоскостях «плашмя»-платформы тоже не кувыркаются —
-                // держат поворот, как кабинки колеса обозрения
-                rotating.keepOrientation = orientationMode == OrientationMode.PrefabAsIs
-                    || (rotationPlane != RotationPlane.XZ && orientationMode != OrientationMode.FrontFromColumn);
                 rotating.Initialize(center);
                 rotating.angularSpeed = settings.rotationSpeed;
                 rotating.clockwise = settings.clockwise;
             }
 
             spawnedPlatforms.Add(platformObj);
-            if (verbose) Debug.Log($"[6] Платформа #{i + 1} успешно создана! Абсолютный угол: {positionAngle}°");
+            Debug.Log($"[6] Платформа #{i + 1} успешно создана! Абсолютный угол: {positionAngle}°");
         }
 
-        if (verbose) Debug.Log($"=== [7] ГОТОВО. Сгенерировано {spawnedPlatforms.Count} платформ ===");
+        Debug.Log($"=== [7] ГОТОВО. Сгенерировано {spawnedPlatforms.Count} платформ ===");
     }
 
     // Автоколлайдер для платформы, у которой нет ни одного коллайдера.
@@ -558,32 +460,9 @@ public class SpiralStepSpawner : MonoBehaviour
 [CanEditMultipleObjects]
 public class SpiralStepSpawnerEditor : Editor
 {
-    // Не чаще одной перегенерации за кадр редактора: при перетаскивании
-    // слайдера события изменения приходят каждый кадр
-    private bool regenQueued;
-
-    private void QueueAutoRegen()
-    {
-        if (regenQueued) return;
-        regenQueued = true;
-        var targetsSnapshot = targets;
-        EditorApplication.delayCall += () =>
-        {
-            regenQueued = false;
-            if (Application.isPlaying) return;
-            foreach (var obj in targetsSnapshot)
-            {
-                var s = obj as SpiralStepSpawner;
-                if (s != null && s.platformPrefab != null) s.RegenerateQuiet();
-            }
-        };
-    }
-
     public override void OnInspectorGUI()
     {
         var spawner = (SpiralStepSpawner)target;
-
-        EditorGUI.BeginChangeCheck();
 
         GUILayout.Label("SPIRAL STEP SPAWNER", EditorStyles.boldLabel);
         GUILayout.Space(10);
@@ -594,7 +473,6 @@ public class SpiralStepSpawnerEditor : Editor
         spawner.columnCenter = (Transform)EditorGUILayout.ObjectField("Column Center", spawner.columnCenter, typeof(Transform), true);
         spawner.generateOnStart = EditorGUILayout.Toggle("Generate On Start", spawner.generateOnStart);
         spawner.destroyPreviousOnGenerate = EditorGUILayout.Toggle("Destroy Previous On Generate", spawner.destroyPreviousOnGenerate);
-        spawner.autoRegenerate = EditorGUILayout.Toggle("Авто-пересчёт при изменении настроек", spawner.autoRegenerate);
         spawner.rotationMode = (SpiralStepSpawner.RotationMode)EditorGUILayout.EnumPopup("Rotation Mode", spawner.rotationMode);
         EditorGUILayout.EndVertical();
 
@@ -636,18 +514,16 @@ public class SpiralStepSpawnerEditor : Editor
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("СПИСОК ПЛАТФОРМ", EditorStyles.boldLabel);
 
-        EditorGUILayout.HelpBox("Start Angle каждой платформы — АБСОЛЮТНАЯ точка на окружности вокруг колонны (0-360°). Для плоскости XY: 0 = вправо (X+), 90 = вверх (Y+), 180 = влево (X-), 270 = вниз (Y-). Для XZ: 90 = вперёд (Z+), 270 = назад (Z-). Меняешь угол — платформа переезжает в новую точку и ПЕРЕСЧИТЫВАЕТ поворот: нос всегда смотрит от колонны.", MessageType.Info);
+        EditorGUILayout.HelpBox("Start Angle каждой платформы — АБСОЛЮТНАЯ точка на окружности вокруг колонны (0-360°). Для плоскости XZ: 0 = вправо (X+), 90 = вперёд (Z+), 180 = влево (X-), 270 = назад (Z-). На позицию больше не влияют никакие другие настройки.", MessageType.Info);
 
         EditorGUILayout.BeginHorizontal();
         if (GUILayout.Button("ДОБАВИТЬ ПЛАТФОРМУ"))
         {
             spawner.AddPlatform();
-            if (spawner.autoRegenerate && !Application.isPlaying) QueueAutoRegen();
         }
         if (GUILayout.Button("РАСПРЕДЕЛИТЬ РАВНОМЕРНО"))
         {
             spawner.DistributeEvenly();
-            if (spawner.autoRegenerate && !Application.isPlaying) QueueAutoRegen();
         }
         if (GUILayout.Button("ОЧИСТИТЬ СПИСОК"))
         {
@@ -679,7 +555,6 @@ public class SpiralStepSpawnerEditor : Editor
             if (GUILayout.Button("Удалить"))
             {
                 spawner.platforms.RemoveAt(i);
-                if (spawner.autoRegenerate && !Application.isPlaying) QueueAutoRegen();
                 break;
             }
             EditorGUILayout.EndVertical();
@@ -692,17 +567,9 @@ public class SpiralStepSpawnerEditor : Editor
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
         spawner.defaultRadius = EditorGUILayout.FloatField("Default Radius", spawner.defaultRadius);
-        spawner.rotationOffset = EditorGUILayout.FloatField("Доворот всех платформ (°)", spawner.rotationOffset);
+        spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset", spawner.rotationOffset);
         spawner.autoFindColumn = EditorGUILayout.Toggle("Auto Find Column", spawner.autoFindColumn);
         spawner.rotationPlane = (SpiralStepSpawner.RotationPlane)EditorGUILayout.EnumPopup("Rotation Plane", spawner.rotationPlane);
-        string[] orientationNames = { "Точно как префаб (один поворот на все углы)", "Плашмя, носом от колонны", "Нос от колонны — пересчёт на каждом угле" };
-        spawner.orientationMode = (SpiralStepSpawner.OrientationMode)EditorGUILayout.Popup("Поворот платформы", (int)spawner.orientationMode, orientationNames);
-        EditorGUILayout.HelpBox("«Нос от колонны» — платформа всегда спавнится «носом» строго от колонны в своей точке: поставил угол 90 — нос от колонны в точке 90°, поставил 91 — всё пересчиталось, платформа переехала и нос снова от колонны. «Плашмя» — платформа лежит горизонтально и только разворачивается вокруг вертикали. «Точно как префаб» — поворот не зависит от угла, все платформы одинаковые (на многих углах будет стоять боком).", MessageType.None);
-        if (spawner.orientationMode != SpiralStepSpawner.OrientationMode.PrefabAsIs)
-        {
-            string[] frontAxisNames = { "Вперёд (Z+)", "Назад (Z-)", "Вверх (Y+)", "Вниз (Y-)", "Вправо (X+)", "Влево (X-)" };
-            spawner.frontAxis = (SpiralStepSpawner.FrontAxis)EditorGUILayout.Popup("Ось «переда» платформы", (int)spawner.frontAxis, frontAxisNames);
-        }
         spawner.parentToColumn = EditorGUILayout.Toggle("Parent To Column", spawner.parentToColumn);
         spawner.defaultMaterial = (Material)EditorGUILayout.ObjectField("Default Material", spawner.defaultMaterial, typeof(Material), false);
         spawner.defaultColor = EditorGUILayout.ColorField("Default Color", spawner.defaultColor);
@@ -710,14 +577,7 @@ public class SpiralStepSpawnerEditor : Editor
         spawner.gizmoColor = EditorGUILayout.ColorField("Gizmo Color", spawner.gizmoColor);
         EditorGUILayout.EndVertical();
 
-        if (EditorGUI.EndChangeCheck())
-        {
-            foreach (var obj in targets) EditorUtility.SetDirty(obj);
-
-            // Автопересчёт: любое изменение настройки (в том числе Start Angle)
-            // сразу пересоздаёт платформы — кнопка СГЕНЕРИРОВАТЬ не нужна
-            if (spawner.autoRegenerate && !Application.isPlaying) QueueAutoRegen();
-        }
+        if (GUI.changed) EditorUtility.SetDirty(spawner);
     }
 }
 #endif
