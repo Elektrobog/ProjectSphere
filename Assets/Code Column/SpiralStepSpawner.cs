@@ -192,7 +192,7 @@ public class SpiralStepSpawner : MonoBehaviour
             float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition + zeroAngleDirection;
             float rotationAngle = startAngle + settings.angleOffset + zeroAngleDirection;
 
-            Quaternion spawnRotation = center.rotation * Quaternion.Euler(0f, -rotationAngle + 90f + rotationOffset, 0f);
+            Quaternion spawnRotation = center.rotation * Quaternion.Euler(0f, -positionAngle + 90f + rotationOffset, 0f);
 
             // Спавним префаб
             GameObject platformObj = Instantiate(platformPrefab, worldCenter, spawnRotation);
@@ -235,7 +235,7 @@ public class SpiralStepSpawner : MonoBehaviour
                 continue;
             }
 
-            Vector3 outwardLocal = new Vector3(Mathf.Cos(positionAngle * Mathf.Deg2Rad), Mathf.Sin(positionAngle * Mathf.Deg2Rad), 0f);
+            Vector3 outwardLocal = new Vector3(Mathf.Cos(positionAngle * Mathf.Deg2Rad), 0f, Mathf.Sin(positionAngle * Mathf.Deg2Rad));
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
 
             Bounds b = meshRenderer.bounds;
