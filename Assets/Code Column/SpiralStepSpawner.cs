@@ -25,6 +25,13 @@ public class SpiralStepSpawner : MonoBehaviour
         NoneRotate    // все платформы стоят
     }
 
+    // Какой коллайдер ставить платформе, если у неё нет ни одного
+    public enum AutoColliderMode
+    {
+        ConvexMesh, // выпуклый MeshCollider — повторяет форму меша платформы
+        Box         // BoxCollider по габаритам меша (простой параллелепипед)
+    }
+
     [System.Serializable]
     public class PlatformSettings
     {
@@ -49,6 +56,10 @@ public class SpiralStepSpawner : MonoBehaviour
     [Header("ВРАЩЕНИЕ ПЛАТФОРМ")]
     [Tooltip("Per Platform — по галочке Enable Rotation у каждой платформы; All Rotate — все платформы крутятся; None Rotate — все стоят (галочки у платформ игнорируются)")]
     public RotationMode rotationMode = RotationMode.PerPlatform;
+
+    [Header("КОЛЛИЗИИ")]
+    [Tooltip("Какой коллайдер ставить платформе, если у префаба нет ни одного: Convex Mesh — повторяет форму меша, Box — параллелепипед по габаритам")]
+    public AutoColliderMode autoColliderMode = AutoColliderMode.ConvexMesh;
 
     [Header("ЦЕНТР КОЛОННЫ")]
     public Transform columnCenter;
@@ -198,22 +209,12 @@ public class SpiralStepSpawner : MonoBehaviour
             platformRb.isKinematic = true;
             platformRb.useGravity = false;
 
-            // КОЛЛАЙДЕР: Rigidbody без коллайдера бесполезен — шар просто проваливался
-            // сквозь платформу. Если у префаба нет ни одного коллайдера — ставим
-            // BoxCollider по размерам меша платформы
+            // КОЛЛАЙДЕР: Rigidbody без коллайдера бесполезен — шар проваливался.
+            // Если у префаба нет ни одного коллайдера — ставим свой (см. AddAutoCollider)
             Collider platformCol = platformObj.GetComponentInChildren<Collider>();
             if (platformCol == null)
             {
-                Renderer colRend = platformObj.GetComponentInChildren<Renderer>();
-                if (colRend != null)
-                {
-                    BoxCollider box = platformObj.AddComponent<BoxCollider>();
-                    Vector3 lo = platformObj.transform.InverseTransformPoint(colRend.bounds.min);
-                    Vector3 hi = platformObj.transform.InverseTransformPoint(colRend.bounds.max);
-                    box.center = (lo + hi) * 0.5f;
-                    box.size = hi - lo;
-                    Debug.Log($"[Спавнер] У платформы #{i + 1} не было коллайдера — добавлен BoxCollider по мешу.");
-                }
+                AddAutoCollider(platformObj, i + 1);
             }
 
             Renderer meshRenderer = platformObj.GetComponentInChildren<Renderer>();
@@ -266,6 +267,41 @@ public class SpiralStepSpawner : MonoBehaviour
         }
 
         Debug.Log($"=== [7] ГОТОВО. Сгенерировано {spawnedPlatforms.Count} платформ ===");
+    }
+
+    // Автоколлайдер для платформы, у которой нет ни одного коллайдера.
+    // По умолчанию — выпуклый MeshCollider, он повторяет форму меша (скруглённые
+    // края платформы, в отличие от прямого BoxCollider).
+    // На кинематическом Rigidbody Unity разрешает только CONVEX MeshCollider,
+    // поэтому выпуклая оболочка — потолок точности, точнее только свой коллайдер в префабе.
+    private void AddAutoCollider(GameObject platformObj, int index)
+    {
+        if (autoColliderMode == AutoColliderMode.ConvexMesh)
+        {
+            MeshFilter mf = platformObj.GetComponentInChildren<MeshFilter>();
+            if (mf != null && mf.sharedMesh != null)
+            {
+                // Вешаем на тот же объект, где лежит меш, иначе коллайдер сместится
+                MeshCollider mc = mf.gameObject.AddComponent<MeshCollider>();
+                mc.sharedMesh = mf.sharedMesh;
+                mc.convex = true;
+                Debug.Log($"[Спавнер] Платформе #{index} добавлен Convex MeshCollider (по форме меша).");
+                return;
+            }
+            Debug.LogWarning($"[Спавнер] У платформы #{index} не найден MeshFilter — ставлю запасной BoxCollider.");
+        }
+
+        // Запасной вариант: BoxCollider по габаритам меша
+        Renderer colRend = platformObj.GetComponentInChildren<Renderer>();
+        if (colRend != null)
+        {
+            BoxCollider box = platformObj.AddComponent<BoxCollider>();
+            Vector3 lo = platformObj.transform.InverseTransformPoint(colRend.bounds.min);
+            Vector3 hi = platformObj.transform.InverseTransformPoint(colRend.bounds.max);
+            box.center = (lo + hi) * 0.5f;
+            box.size = hi - lo;
+            Debug.Log($"[Спавнер] Платформе #{index} добавлен BoxCollider по мешу.");
+        }
     }
 
     [ContextMenu("Clear Platforms")]
@@ -370,6 +406,13 @@ public class SpiralStepSpawnerEditor : Editor
         spawner.generateOnStart = EditorGUILayout.Toggle("Generate On Start", spawner.generateOnStart);
         spawner.destroyPreviousOnGenerate = EditorGUILayout.Toggle("Destroy Previous On Generate", spawner.destroyPreviousOnGenerate);
         spawner.rotationMode = (SpiralStepSpawner.RotationMode)EditorGUILayout.EnumPopup("Rotation Mode", spawner.rotationMode);
+        EditorGUILayout.EndVertical();
+
+        GUILayout.Space(10);
+
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+        GUILayout.Label("КОЛЛИЗИИ", EditorStyles.boldLabel);
+        spawner.autoColliderMode = (SpiralStepSpawner.AutoColliderMode)EditorGUILayout.EnumPopup("Auto Collider Mode", spawner.autoColliderMode);
         EditorGUILayout.EndVertical();
 
         GUILayout.Space(10);
