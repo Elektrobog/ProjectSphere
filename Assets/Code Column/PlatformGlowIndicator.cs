@@ -30,6 +30,9 @@ public class PlatformGlowIndicator : MonoBehaviour
     {
         public Renderer renderer;
         public int materialIndex;
+        // Сила свечения, считанная из САМОГО материала при старте —
+        // настройки HDR-интенсивности материала больше не затираются
+        public float emissionStrength = 1f;
     }
 
     [Header("Ссылки")]
@@ -72,7 +75,8 @@ public class PlatformGlowIndicator : MonoBehaviour
             {
                 if (r == null) continue;
                 int idx = FindGlowMaterialIndex(r);
-                glowTargets.Add(new GlowTarget { renderer = r, materialIndex = idx });
+                if (idx >= 0)
+                    glowTargets.Add(new GlowTarget { renderer = r, materialIndex = idx, emissionStrength = GetEmissionStrength(mats[idx]) });
             }
         }
         else
@@ -82,7 +86,7 @@ public class PlatformGlowIndicator : MonoBehaviour
             {
                 int idx = FindGlowMaterialIndex(r);
                 if (idx >= 0)
-                    glowTargets.Add(new GlowTarget { renderer = r, materialIndex = idx });
+                    glowTargets.Add(new GlowTarget { renderer = r, materialIndex = idx, emissionStrength = GetEmissionStrength(r.sharedMaterials[idx]) });
             }
         }
 
@@ -91,6 +95,16 @@ public class PlatformGlowIndicator : MonoBehaviour
 
         currentColor = idleColor;
         nextScanTime = Time.time;
+    }
+
+    // Сила свечения материала: берём яркость его HDR-цвета Emission.
+    // Если в материале emission не настроен (яркость ~0) — используем поле
+    // emissionIntensity скрипта как запасное значение.
+    private float GetEmissionStrength(Material mat)
+    {
+        if (mat == null || !mat.HasProperty("_EmissionColor")) return emissionIntensity;
+        float s = mat.GetColor("_EmissionColor").maxColorComponent;
+        return s < 0.01f ? emissionIntensity : s;
     }
 
     // Возвращает индекс слота с материалом GlowMat 1 у renderer'а, либо -1
@@ -177,7 +191,7 @@ public class PlatformGlowIndicator : MonoBehaviour
             // _BaseColor — URP, _Color — Built-in: ставим то, что есть в шейдере
             if (mat.HasProperty("_BaseColor")) propBlock.SetColor("_BaseColor", currentColor);
             if (mat.HasProperty("_Color")) propBlock.SetColor("_Color", currentColor);
-            if (mat.HasProperty("_EmissionColor")) propBlock.SetColor("_EmissionColor", currentColor * emissionIntensity);
+            if (mat.HasProperty("_EmissionColor")) propBlock.SetColor("_EmissionColor", currentColor * t.emissionStrength);
 
             // Ставим блок ТОЛЬКО на слот GlowMat 1 — второй материал не трогаем
             r.SetPropertyBlock(propBlock, t.materialIndex);
