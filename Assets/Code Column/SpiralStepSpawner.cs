@@ -28,8 +28,7 @@ public class SpiralStepSpawner : MonoBehaviour
     // Какой коллайдер ставить платформе, если у неё нет ни одного
     public enum AutoColliderMode
     {
-        TopDisc,    // цилиндр по ВЕРХНЕЙ поверхности платформы — шар падает ровно с видимого края
-        ConvexMesh, // выпуклый MeshCollider — повторяет форму меша, но у скруглённых платформ верх выходит за видимый край
+        ConvexMesh, // выпуклый MeshCollider — повторяет форму меша платформы
         Box         // BoxCollider по габаритам меша (простой параллелепипед)
     }
 
@@ -59,8 +58,9 @@ public class SpiralStepSpawner : MonoBehaviour
     public RotationMode rotationMode = RotationMode.PerPlatform;
 
     [Header("КОЛЛИЗИИ")]
-    [Tooltip("Какой коллайдер ставить платформе, если у префаба нет ни одного: Top Disc — цилиндр по верхней дорожке (шар падает с видимого края), Convex Mesh — выпуклая оболочка меша, Box — параллелепипед")]
-    public AutoColliderMode autoColliderMode = AutoColliderMode.TopDisc;
+    [Tooltip("Какой коллайдер ставить платформе, если у префаба нет ни одного: Convex Mesh — повторяет форм
+у меша, Box — параллелепипед по габаритам")]
+    public AutoColliderMode autoColliderMode = AutoColliderMode.ConvexMesh;
 
     [Header("ЦЕНТР КОЛОННЫ")]
     public Transform columnCenter;
@@ -112,7 +112,8 @@ public class SpiralStepSpawner : MonoBehaviour
             if (existing.Count > 0)
             {
                 spawnedPlatforms.AddRange(existing);
-                Debug.Log($"[Спавнер] На колонне уже есть {existing.Count} платформ — повторная генерация пропущена.");
+                Debug.Log($"[Спавнер] На колонне уже есть {existing.Count} платформ — повторная 
+генерация пропущена.");
             }
             else
             {
@@ -172,7 +173,8 @@ public class SpiralStepSpawner : MonoBehaviour
             Debug.LogWarning("[ПРЕДУПРЕЖДЕНИЕ] Список платформ ПУСТ! Нажми кнопку 'ДОБАВИТЬ ПЛАТФОРМУ' в инспекторе.");
             return;
         }
-        Debug.Log($"[5] Платформ в списке: {platforms.Count}");
+        Debug.Log($"[5] Платформ в
+ списке: {platforms.Count}");
 
         Vector3 worldCenter = center.position;
 
@@ -212,7 +214,8 @@ public class SpiralStepSpawner : MonoBehaviour
 
             // КОЛЛАЙДЕР: Rigidbody без коллайдера бесполезен — шар проваливался.
             // Если у префаба нет ни одного коллайдера — ставим свой (см. AddAutoCollider)
-            Collider platformCol = platformObj.GetComponentInChildren<Collider>();
+            Col
+lider platformCol = platformObj.GetComponentInChildren<Collider>();
             if (platformCol == null)
             {
                 AddAutoCollider(platformObj, i + 1);
@@ -256,7 +259,8 @@ public class SpiralStepSpawner : MonoBehaviour
 
             if (ShouldRotate(settings))
             {
-                RotatingPlatform rotating = platformObj.GetComponent<RotatingPlatform>();
+                RotatingPlatform rotating = platformObj.GetComponent<RotatingPl
+atform>();
                 if (rotating == null) rotating = platformObj.AddComponent<RotatingPlatform>();
                 rotating.Initialize(center);
                 rotating.angularSpeed = settings.rotationSpeed;
@@ -277,16 +281,6 @@ public class SpiralStepSpawner : MonoBehaviour
     // поэтому выпуклая оболочка — потолок точности, точнее только свой коллайдер в префабе.
     private void AddAutoCollider(GameObject platformObj, int index)
     {
-        // Лучший режим: цилиндр по верхней "дорожке" платформы. Convex MeshCollider
-        // у скруглённой платформы расплющивает верх до самой широкой точки меша —
-        // шар получает невидимую полку за краем и не падает. Top Disc строит
-        // цилиндр по фактическому радиусу верхней поверхности (с запасом 2% внутрь).
-        if (autoColliderMode == AutoColliderMode.TopDisc)
-        {
-            if (TryAddTopDiscCollider(platformObj, index)) return;
-            Debug.LogWarning($"[Спавнер] Платформе #{index} не удалось построить цилиндр-коллайдер (Top Disc) — пробую Convex Mesh.");
-        }
-
         if (autoColliderMode == AutoColliderMode.ConvexMesh)
         {
             MeshFilter mf = platformObj.GetComponentInChildren<MeshFilter>();
@@ -307,88 +301,13 @@ public class SpiralStepSpawner : MonoBehaviour
         if (colRend != null)
         {
             BoxCollider box = platformObj.AddComponent<BoxCollider>();
-            Vector3 lo = platformObj.transform.InverseTransformPoint(colRend.bounds.min);
+            Vector3 lo = platformObj.transform.InverseTr
+ansformPoint(colRend.bounds.min);
             Vector3 hi = platformObj.transform.InverseTransformPoint(colRend.bounds.max);
             box.center = (lo + hi) * 0.5f;
             box.size = hi - lo;
             Debug.Log($"[Спавнер] Платформе #{index} добавлен BoxCollider по мешу.");
         }
-    }
-
-    // Строит цилиндр-коллайдер по верхней поверхности платформы.
-    // ВСЁ считается относительно ЦЕНТРА ГАБАРИТОВ меша (mesh.bounds.center),
-    // а не локального нуля: у FBX-моделей пивот часто стоит в стороне
-    // (например, в центре сцены), и расчёт от нуля давал гигантские
-    // "случайные" коллайдеры. Здесь это не влияет на результат.
-    private bool TryAddTopDiscCollider(GameObject platformObj, int index)
-    {
-        MeshFilter mf = platformObj.GetComponentInChildren<MeshFilter>();
-        if (mf == null || mf.sharedMesh == null) return false;
-
-        Mesh mesh = mf.sharedMesh;
-        Vector3[] vertices;
-        try { vertices = mesh.vertices; }
-        catch { return false; } // меш без Read/Write — уходим в Convex Mesh
-
-        Bounds mb = mesh.bounds;
-        Vector3 c = mb.center; // центр габаритов в локальных координатах меша
-
-        // Верхняя поверхность: вершины в верхних 10% высоты меша
-        float yTop = mb.max.y - mb.size.y * 0.10f;
-        float radius = 0f;
-        bool found = false;
-        foreach (Vector3 v in vertices)
-        {
-            if (v.y < yTop) continue;
-            float dx = v.x - c.x;
-            float dz = v.z - c.z;
-            float r = Mathf.Sqrt(dx * dx + dz * dz);
-            if (!found || r > radius) { radius = r; found = true; }
-        }
-        if (!found || radius < 0.05f) return false;
-
-        radius *= 0.98f; // небольшой запас внутрь, чтобы шар отпускался у самого края
-
-        Mesh cylinder = BuildCylinderMesh(c.x, c.z, radius, mb.min.y, mb.max.y, 20);
-        MeshCollider mc = mf.gameObject.AddComponent<MeshCollider>();
-        mc.sharedMesh = cylinder;
-        mc.convex = true;
-        Debug.Log($"[Спавнер] Платформе #{index} добавлен цилиндр-коллайдер Top Disc (центр меша локально: {c.x:F2}, {c.z:F2}; радиус {radius:F2}).");
-        return true;
-    }
-
-    // Низкополигональный цилиндр вокруг точки (cx, cz) для convex MeshCollider
-    private Mesh BuildCylinderMesh(float cx, float cz, float radius, float y0, float y1, int segments)
-    {
-        Vector3[] verts = new Vector3[segments * 2 + 2];
-        for (int i = 0; i < segments; i++)
-        {
-            float a = i / (float)segments * Mathf.PI * 2f;
-            float x = cx + Mathf.Cos(a) * radius;
-            float z = cz + Mathf.Sin(a) * radius;
-            verts[i] = new Vector3(x, y0, z);
-            verts[i + segments] = new Vector3(x, y1, z);
-        }
-        int bottomCenter = segments * 2;
-        int topCenter = bottomCenter + 1;
-        verts[bottomCenter] = new Vector3(cx, y0, cz);
-        verts[topCenter] = new Vector3(cx, y1, cz);
-
-        int[] tris = new int[segments * 6];
-        int t = 0;
-        for (int i = 0; i < segments; i++)
-        {
-            int j = (i + 1) % segments;
-            tris[t++] = i; tris[t++] = j; tris[t++] = j + segments;
-            tris[t++] = i; tris[t++] = j + segments; tris[t++] = i + segments;
-        }
-
-        Mesh m = new Mesh();
-        m.SetVertices(verts);
-        m.SetTriangles(tris, 0);
-        m.RecalculateNormals();
-        m.RecalculateBounds();
-        return m;
     }
 
     [ContextMenu("Clear Platforms")]
@@ -437,7 +356,8 @@ public class SpiralStepSpawner : MonoBehaviour
     private void CollectPlatformObjects(Transform root, List<GameObject> list)
     {
         foreach (Transform child in root)
-        {
+        
+{
             if (child.GetComponent<SpiralPlatformMarker>() != null ||
                 child.GetComponent<RotatingPlatform>() != null)
             {
@@ -488,7 +408,8 @@ public class SpiralStepSpawnerEditor : Editor
 
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("ОСНОВНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
-        spawner.platformPrefab = (GameObject)EditorGUILayout.ObjectField("Platform Prefab", spawner.platformPrefab, typeof(GameObject), false);
+        spawner.platformPrefab = (GameObject)EditorGUILayout.ObjectField("Platform Prefab", spawner.p
+latformPrefab, typeof(GameObject), false);
         spawner.columnCenter = (Transform)EditorGUILayout.ObjectField("Column Center", spawner.columnCenter, typeof(Transform), true);
         spawner.generateOnStart = EditorGUILayout.Toggle("Generate On Start", spawner.generateOnStart);
         spawner.destroyPreviousOnGenerate = EditorGUILayout.Toggle("Destroy Previous On Generate", spawner.destroyPreviousOnGenerate);
@@ -536,7 +457,8 @@ public class SpiralStepSpawnerEditor : Editor
         EditorGUILayout.BeginHorizontal();
         if (GUILayout.Button("ДОБАВИТЬ ПЛАТФОРМУ"))
         {
-            spawner.AddPlatform();
+     
+       spawner.AddPlatform();
         }
         if (GUILayout.Button("ОЧИСТИТЬ СПИСОК"))
         {
@@ -580,7 +502,8 @@ public class SpiralStepSpawnerEditor : Editor
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
         spawner.defaultRadius = EditorGUILayout.FloatField("Default Radius", spawner.defaultRadius);
-        spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset", spawner.rotationOffset);
+        spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset
+", spawner.rotationOffset);
         spawner.startAngle = EditorGUILayout.FloatField("Start Angle", spawner.startAngle);
         spawner.autoFindColumn = EditorGUILayout.Toggle("Auto Find Column", spawner.autoFindColumn);
         spawner.parentToColumn = EditorGUILayout.Toggle("Parent To Column", spawner.parentToColumn);
