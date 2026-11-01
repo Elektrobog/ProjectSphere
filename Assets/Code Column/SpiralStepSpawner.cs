@@ -40,6 +40,11 @@ public class SpiralStepSpawner : MonoBehaviour
         public float angleOffset = 0f;
         public float customRadius = 0f;
 
+        [Header("Позиция спавна")]
+        [Tooltip("Позиция на окружности (в градусах). 0 = верх, 90 = право, 180 = низ, 270 = лево")]
+        [Range(0f, 360f)]
+        public float spawnPosition = 0f;
+
         [Header("Вращение")]
         public bool enableRotation = true;
         public float rotationSpeed = 45f;
@@ -179,7 +184,7 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             var settings = platforms[i];
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
-            float angle = startAngle + settings.angleOffset;
+            float angle = startAngle + settings.angleOffset + settings.spawnPosition;
 
             Quaternion spawnRotation = center.rotation * Quaternion.Euler(0f, -angle + 90f + rotationOffset, 0f);
 
@@ -378,7 +383,7 @@ public class SpiralStepSpawner : MonoBehaviour
         foreach (var settings in platforms)
         {
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
-            float angle = startAngle + settings.angleOffset;
+            float angle = startAngle + settings.angleOffset + settings.spawnPosition;
             Vector3 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
             Vector3 pos = center.position + outwardWorld * effectiveRadius + Vector3.up * settings.height;
