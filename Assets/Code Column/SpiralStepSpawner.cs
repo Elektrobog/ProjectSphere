@@ -240,7 +240,7 @@ public class SpiralStepSpawner : MonoBehaviour
 
             Bounds b = meshRenderer.bounds;
             float minProjR = float.MaxValue;
-            float minProjY = float.MaxValue;
+            float minProjZ = float.MaxValue;
 
             for (int c = 0; c < 8; c++)
             {
@@ -252,14 +252,14 @@ public class SpiralStepSpawner : MonoBehaviour
                 Vector3 rel = corner - worldCenter;
                 float projR = Vector3.Dot(rel, outwardWorld);
                 if (projR < minProjR) minProjR = projR;
-                float projY = rel.y;
-                if (projY < minProjY) minProjY = projY;
+                float projZ = rel.z;
+                if (projZ < minProjZ) minProjZ = projZ;
             }
 
             float shiftR = effectiveRadius - minProjR;
-            float shiftY = settings.height - minProjY;
+            float shiftZ = settings.height - minProjZ;
 
-            platformObj.transform.position = worldCenter + outwardWorld * shiftR + Vector3.up * shiftY;
+            platformObj.transform.position = worldCenter + outwardWorld * shiftR + Vector3.forward * shiftZ;
 
             if (settings.customMaterial != null) meshRenderer.sharedMaterial = settings.customMaterial;
             else if (defaultMaterial != null) meshRenderer.sharedMaterial = defaultMaterial;
