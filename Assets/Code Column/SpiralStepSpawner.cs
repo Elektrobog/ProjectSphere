@@ -58,8 +58,7 @@ public class SpiralStepSpawner : MonoBehaviour
     public RotationMode rotationMode = RotationMode.PerPlatform;
 
     [Header("КОЛЛИЗИИ")]
-    [Tooltip("Какой коллайдер ставить платформе, если у префаба нет ни одного: Convex Mesh — повторяет форм
-у меша, Box — параллелепипед по габаритам")]
+    [Tooltip("Какой коллайдер ставить платформе, если у прецаба нет ни одного: Convex Mesh — повторяет форму меша, Box — параллелепипед по габаритам")]
     public AutoColliderMode autoColliderMode = AutoColliderMode.ConvexMesh;
 
     [Header("ЦЕНТР КОЛОННЫ")]
@@ -112,8 +111,7 @@ public class SpiralStepSpawner : MonoBehaviour
             if (existing.Count > 0)
             {
                 spawnedPlatforms.AddRange(existing);
-                Debug.Log($"[Спавнер] На колонне уже есть {existing.Count} платформ — повторная 
-генерация пропущена.");
+                Debug.Log($"[Спавнер] На колонне уже есть {existing.Count} платформ — повторная генерация пропущена.");
             }
             else
             {
@@ -173,8 +171,7 @@ public class SpiralStepSpawner : MonoBehaviour
             Debug.LogWarning("[ПРЕДУПРЕЖДЕНИЕ] Список платформ ПУСТ! Нажми кнопку 'ДОБАВИТЬ ПЛАТФОРМУ' в инспекторе.");
             return;
         }
-        Debug.Log($"[5] Платформ в
- списке: {platforms.Count}");
+        Debug.Log($"[5] Платформ в списке: {platforms.Count}");
 
         Vector3 worldCenter = center.position;
 
@@ -259,8 +256,7 @@ lider platformCol = platformObj.GetComponentInChildren<Collider>();
 
             if (ShouldRotate(settings))
             {
-                RotatingPlatform rotating = platformObj.GetComponent<RotatingPl
-atform>();
+                RotatingPlatform rotating = platformObj.GetComponent<RotatingPlatform>();
                 if (rotating == null) rotating = platformObj.AddComponent<RotatingPlatform>();
                 rotating.Initialize(center);
                 rotating.angularSpeed = settings.rotationSpeed;
@@ -301,8 +297,7 @@ atform>();
         if (colRend != null)
         {
             BoxCollider box = platformObj.AddComponent<BoxCollider>();
-            Vector3 lo = platformObj.transform.InverseTr
-ansformPoint(colRend.bounds.min);
+            Vector3 lo = platformObj.transform.InverseTransformPoint(colRend.bounds.min);
             Vector3 hi = platformObj.transform.InverseTransformPoint(colRend.bounds.max);
             box.center = (lo + hi) * 0.5f;
             box.size = hi - lo;
@@ -408,8 +403,7 @@ public class SpiralStepSpawnerEditor : Editor
 
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("ОСНОВНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
-        spawner.platformPrefab = (GameObject)EditorGUILayout.ObjectField("Platform Prefab", spawner.p
-latformPrefab, typeof(GameObject), false);
+        spawner.platformPrefab = (GameObject)EditorGUILayout.ObjectField("Platform Prefab", spawner.platformPrefab, typeof(GameObject), false);
         spawner.columnCenter = (Transform)EditorGUILayout.ObjectField("Column Center", spawner.columnCenter, typeof(Transform), true);
         spawner.generateOnStart = EditorGUILayout.Toggle("Generate On Start", spawner.generateOnStart);
         spawner.destroyPreviousOnGenerate = EditorGUILayout.Toggle("Destroy Previous On Generate", spawner.destroyPreviousOnGenerate);
@@ -502,8 +496,7 @@ latformPrefab, typeof(GameObject), false);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
         spawner.defaultRadius = EditorGUILayout.FloatField("Default Radius", spawner.defaultRadius);
-        spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset
-", spawner.rotationOffset);
+        spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset", spawner.rotationOffset);
         spawner.startAngle = EditorGUILayout.FloatField("Start Angle", spawner.startAngle);
         spawner.autoFindColumn = EditorGUILayout.Toggle("Auto Find Column", spawner.autoFindColumn);
         spawner.parentToColumn = EditorGUILayout.Toggle("Parent To Column", spawner.parentToColumn);
