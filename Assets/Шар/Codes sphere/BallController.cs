@@ -44,7 +44,8 @@ public class BallController : MonoBehaviour
 
     [Tooltip("Через сколько секунд скорость после отпускания ввода достигает максимума (gripSmoothTimeMax)")]
     public float gripRampDuration = 0.6f;
-    [Tooltip("Ещё один параметр: если скорость ниже этого порога, то сцепление срабатывает сразу без задержки (не ждём gripRampDuration)")]
+    [Tooltip("Ещё один параметр: если скорость ниже этого порога, то с
+цепление срабатывает сразу без задержки (не ждём gripRampDuration)")]
     public float gripVelocityThreshold = 0.5f;
 
     [Header("Position Anchor (Устраняет сползание при вращении платформы)")]
@@ -77,7 +78,8 @@ public class BallController : MonoBehaviour
     
     [Tooltip("Дополнительный множитель для воздуха при движении по склонам")]
     [Range(0f, 1f)]
-    public float airSlopeControlFactor = 0.5f;
+    public float air
+SlopeControlFactor = 0.5f;
 
     [Header("Advanced Physics")]
     [Tooltip("Дополнительная гравитация при подъеме (для более отзывчивого прыжка)")]
@@ -138,7 +140,8 @@ public class BallController : MonoBehaviour
     private void OnEnable()
     {
         inputActions.Player.Move.performed += OnMovePerformed;
-        inputActions.Player.Move.canceled += OnMoveCanceled;
+  
+      inputActions.Player.Move.canceled += OnMoveCanceled;
 
         inputActions.Player.Brake.performed += OnBrakePerformed;
         inputActions.Player.Brake.canceled += OnBrakeCanceled;
@@ -194,7 +197,8 @@ public class BallController : MonoBehaviour
         {
             activePlatform = null;
             activePlatformTransform = null;
-            hasAnchor = false;
+            hasAnchor = false
+;
         }
     }
 
@@ -245,7 +249,8 @@ public class BallController : MonoBehaviour
             currentTorqueMultiplier = Mathf.Lerp(
                 currentTorqueMultiplier, 
                 0f, 
-                decelerationMultiplier * Time.fixedDeltaTime * 10f
+             
+   decelerationMultiplier * Time.fixedDeltaTime * 10f
             );
         }
         else
@@ -295,6 +300,7 @@ public class BallController : MonoBehaviour
 
             if (moveInput.sqrMagnitude > 0.01f)
             {
+
                 if (ground.IsGrounded)
                 {
                     if (platformRelativeControl && activePlatform != null)
@@ -325,7 +331,8 @@ public class BallController : MonoBehaviour
                     // В воздухе - применение силы напрямую
                     // Это позволяет лучше контролировать шар в полете
                     rb.AddForce(moveDir * airControlForce * airControlFactor * slopeSlide.SlopeControlFactor, ForceMode.Acceleration);
-                }
+            
+    }
 
                 // Сбрасываем "память" SmoothDamp и якорь
                 velocityRef = Vector3.zero;
@@ -334,16 +341,6 @@ public class BallController : MonoBehaviour
             }
             else if (ground.IsGrounded && activePlatform != null)
             {
-                // Если шар выехал за габариты платформы — отпускаем его:
-                // якорь и сцепление не должны "приклеивать" шар к краю
-                if (!IsOverPlatformFootprint())
-                {
-                    hasAnchor = false;
-                    LimitVelocity(pVel);
-                    ApplyExtraGravity();
-                    return;
-                }
-
                 // ---- ПАССИВНОЕ СЦЕПЛЕНИЕ (GRIP) ----
                 float timeSinceMove = Time.time - lastMoveTime;
                 Vector3 relativeVel = rb.linearVelocity - pVel;
@@ -372,7 +369,8 @@ public class BallController : MonoBehaviour
                     // Радиальный вектор от оси вращения к шару: r = (v × ω) / |ω|²
                     Vector3 radial = Vector3.Cross(pVel, pAngVel) / pAngVel.sqrMagnitude;
                     float radius = radial.magnitude;
-                    if (radius > 0.05f)
+                    if (radius > 
+0.05f)
                     {
                         centrifugalAccel = pAngVel.sqrMagnitude * radius; // ω²·R
                         if (centrifugalAccel * centrifugalDriftFactor > centrifugalGripLimit)
@@ -414,7 +412,8 @@ public class BallController : MonoBehaviour
                         );
                     }
                 }
-                else
+               
+ else
                 {
                     hasAnchor = false;
                 }
@@ -465,23 +464,8 @@ public class BallController : MonoBehaviour
         LimitVelocity(pVel);
         
         // 6. Дополнительная гравитация
-        ApplyExtraGravity();
-    }
-
-    // Проверка: шар ещё над платформой? Сравниваем горизонтальную дистанцию
-    // от центра платформы с её радиусом по коллайдеру (с небольшим запасом внутрь).
-    // Если шар выехал за край — якорь/сцепление отключаются, и он падает честно.
-    private bool IsOverPlatformFootprint()
-    {
-        if (activePlatformTransform == null) return false;
-        Collider col = activePlatformTransform.GetComponentInChildren<Collider>();
-        if (col == null) return true; // нет коллайдера — не мешаем прежней логике
-        Vector3 c = col.bounds.center;
-        Vector3 e = col.bounds.extents;
-        float radius = Mathf.Max(e.x, e.z);
-        Vector3 d = rb.position - c;
-        d.y = 0f;
-        return d.magnitude <= radius * 0.95f;
+     
+   ApplyExtraGravity();
     }
 
     private void ApplyBraking(Vector3 pVel, Vector3 pAngVel)
