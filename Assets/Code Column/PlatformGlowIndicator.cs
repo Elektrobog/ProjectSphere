@@ -48,8 +48,6 @@ public class PlatformGlowIndicator : MonoBehaviour
     public Color idleColor = new Color(1f, 0.1f, 0.05f);
     [Tooltip("Свечение, когда платформа КРУТИТСЯ")]
     public Color rotatingColor = new Color(0.1f, 1f, 0.2f);
-    [Tooltip("Сила свечения (множитель над цветом)")]
-    public float emissionIntensity = 2.5f;
     [Tooltip("Скорость плавного перехода цвета")]
     [Range(0.01f, 10f)]
     public float lerpSpeed = 4f;
@@ -76,7 +74,7 @@ public class PlatformGlowIndicator : MonoBehaviour
                 if (r == null) continue;
                 int idx = FindGlowMaterialIndex(r);
                 if (idx >= 0)
-                    glowTargets.Add(new GlowTarget { renderer = r, materialIndex = idx, emissionStrength = GetEmissionStrength(mats[idx]) });
+                    glowTargets.Add(new GlowTarget { renderer = r, materialIndex = idx, emissionStrength = GetEmissionStrength(r.sharedMaterials[idx]) });
             }
         }
         else
@@ -102,9 +100,9 @@ public class PlatformGlowIndicator : MonoBehaviour
     // emissionIntensity скрипта как запасное значение.
     private float GetEmissionStrength(Material mat)
     {
-        if (mat == null || !mat.HasProperty("_EmissionColor")) return emissionIntensity;
+        if (mat == null || !mat.HasProperty("_EmissionColor")) return 1f;
         float s = mat.GetColor("_EmissionColor").maxColorComponent;
-        return s < 0.01f ? emissionIntensity : s;
+        return s < 0.01f ? 1f : s;
     }
 
     // Возвращает индекс слота с материалом GlowMat 1 у renderer'а, либо -1
