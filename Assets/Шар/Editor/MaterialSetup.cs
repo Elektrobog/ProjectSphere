@@ -35,7 +35,7 @@ public static class MaterialSetup
     [Tooltip("Интенсивность свечения плиты. 0 = выключено, 0.5 = слабо, 1.5 = заметно.")]
     private static float plateEmissionIntensity = 0.8f;
 
-    [Tooltip("Радиус свечения от центра плиты (доля UV).\n" +
+    [Tooltip("Радиус свечения от центра плиты (доля UV). " +
              "0.15 = маленькая точка, 0.5 = половина плиты, 1.0 = вся плита.")]
     private static float plateGlowRadius = 0.35f;
 
