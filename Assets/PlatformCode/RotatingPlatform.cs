@@ -7,6 +7,8 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
     public Transform rotationCenter;
     [Tooltip("Ось орбиты вокруг центра. Для плоскости XZ — (0,1,0), для вертикальной XY — (0,0,1). Спавнер выставляет автоматически по выбранной плоскости.")]
     public Vector3 rotationAxis = Vector3.up;
+    [Tooltip("Платформа НЕ вращается вместе с орбитой — всегда держит свой поворот, как кабинка колеса обозрения. Выключено — платформа поворачивается вместе с орбитой (носом от центра, как лопасть). Спавнер выставляет автоматически.")]
+    public bool keepOrientation = false;
     public float angularSpeed = 30f;
     public bool clockwise = true;
 
@@ -48,7 +50,7 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
         Quaternion orbit = Quaternion.AngleAxis(accumulatedAngle, rotationAxis.normalized);
         Vector3 rotatedOffset = orbit * initialLocalOffset;
         rb.MovePosition(rotationCenter.position + rotatedOffset);
-        rb.MoveRotation(orbit * initialRotation);
+        rb.MoveRotation(keepOrientation ? initialRotation : orbit * initialRotation);
     }
 
     public Vector3 GetVelocityAtPoint(Vector3 worldPoint)
