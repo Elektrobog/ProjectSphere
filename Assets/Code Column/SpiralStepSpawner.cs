@@ -211,8 +211,7 @@ public class SpiralStepSpawner : MonoBehaviour
 
             // КОЛЛАЙДЕР: Rigidbody без коллайдера бесполезен — шар проваливался.
             // Если у префаба нет ни одного коллайдера — ставим свой (см. AddAutoCollider)
-            Col
-lider platformCol = platformObj.GetComponentInChildren<Collider>();
+            Collider platformCol = platformObj.GetComponentInChildren<Collider>();
             if (platformCol == null)
             {
                 AddAutoCollider(platformObj, i + 1);

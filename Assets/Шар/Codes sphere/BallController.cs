@@ -77,8 +77,7 @@ public class BallController : MonoBehaviour
     
     [Tooltip("Дополнительный множитель для воздуха при движении по склонам")]
     [Range(0f, 1f)]
-    public float air
-SlopeControlFactor = 0.5f;
+    public float airSlopeControlFactor = 0.5f;
 
     [Header("Advanced Physics")]
     [Tooltip("Дополнительная гравитация при подъеме (для более отзывчивого прыжка)")]
