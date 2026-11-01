@@ -188,6 +188,16 @@ public class SpiralStepSpawner : MonoBehaviour
                 platformObj.AddComponent<SpiralPlatformMarker>();
             }
 
+            // ФИЗИКА/КОЛЛИЗИИ: у префаба есть Rigidbody, но кинематичным его делает
+            // только RotatingPlatform.Awake — то есть только вращающиеся платформы.
+            // Стоящая платформа с обычным Rigidbody падала под гравитацией,
+            // и её выталкивало коллайдером колонны (сбиты поворот, высота, позиция).
+            // Поэтому каждую созданную платформу делаем кинематиком без гравитации.
+            Rigidbody platformRb = platformObj.GetComponent<Rigidbody>();
+            if (platformRb == null) platformRb = platformObj.AddComponent<Rigidbody>();
+            platformRb.isKinematic = true;
+            platformRb.useGravity = false;
+
             Renderer meshRenderer = platformObj.GetComponentInChildren<Renderer>();
             if (meshRenderer == null)
             {
