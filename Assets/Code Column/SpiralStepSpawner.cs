@@ -37,21 +37,18 @@ public class SpiralStepSpawner : MonoBehaviour
     {
         XZ,  // Горизонтальная
         XY,  // Вертикальная
-        YZ   // Горизонтальная
+        YZ   // Вертикальная
     }
-
-
 
     [System.Serializable]
     public class PlatformSettings
     {
         [Header("Позиция")]
         public float height = 5f;
-        public float angleOffset = 0f;
         public float customRadius = 0f;
 
-        [Header("Позиция спавна")]
-        [Tooltip("Позиция на окружности (в градусах). 0 = верх, 90 = право, 180 = низ, 270 = лево")]
+        [Header("Стартовая точка спавна")]
+        [Tooltip("АБСОЛЮТНАЯ точка на окружности вокруг колонны (в градусах, 0-360). НЕ зависит от других настроек. Для плоскости XZ: 0 = вправо (X+), 90 = вперёд (Z+), 180 = влево (X-), 270 = назад (Z-).")]
         [Range(0f, 360f)]
         public float spawnPosition = 0f;
 
@@ -73,7 +70,7 @@ public class SpiralStepSpawner : MonoBehaviour
     public RotationMode rotationMode = RotationMode.PerPlatform;
 
     [Header("КОЛЛИЗИИ")]
-    [Tooltip("Какой коллайдер ставить платформе, если у прецаба нет ни одного: Convex Mesh — повторяет форму меша, Box — параллелепипед по габаритам")]
+    [Tooltip("Какой коллайдер ставить платформе, если у префаба нет ни одного: Convex Mesh — повторяет форму меша, Box — параллелепипед по габаритам")]
     public AutoColliderMode autoColliderMode = AutoColliderMode.ConvexMesh;
 
     [Header("ЦЕНТР КОЛОННЫ")]
@@ -83,8 +80,8 @@ public class SpiralStepSpawner : MonoBehaviour
 
     [Header("НАСТРОЙКИ ГЕНЕРАЦИИ")]
     public float defaultRadius = 3.4f;
+    [Tooltip("Поворот САМОЙ платформы вокруг своей оси (не влияет на позицию на окружности)")]
     public float rotationOffset = 0f;
-    public float startAngle = 0f;
     public bool generateOnStart = true;
     public bool destroyPreviousOnGenerate = true;
 
@@ -99,12 +96,6 @@ public class SpiralStepSpawner : MonoBehaviour
     public bool parentToColumn = true;
     public bool showGizmos = true;
     public Color gizmoColor = Color.cyan;
-
-    [Header("\u041d\u0410\u0441\u0442\u0440\u043e\u0439\u043a\u0430 \u0441\u043f\u0438\u0440\u0430\u043b\u0438")]
-    [Tooltip("\u0413\u043b\u043e\u0431\u0430\u043b\u044c\u043d\u044b\u0439 \u043f\u043e\u0432\u043e\u0440\u043e\u0442 \u0432\u0441\u0435\u0439 \u0441\u043f\u0438\u0440\u0430\u043b\u0438 (\u0432 \u0433\u0440\u0430\u0434\u0443\u0441\u0430\u0445). 0 = \u0432\u043f\u0440\u0430\u0432\u043e (X+), 90 = \u0432\u0432\u0435\u0440\u0445, 180 = \u0432\u043b\u0435\u0432\u043e (X-), 270 = \u0432\u043d\u0438\u0437")]
-    [Range(0f, 360f)]
-    public float zeroAngleDirection = 0f;
-
 
     [Header("Плоскость вращения")]
     [Tooltip("Выберите плоскость, в которой будут располагаться платформы")]
@@ -161,6 +152,15 @@ public class SpiralStepSpawner : MonoBehaviour
         }
     }
 
+    // СТАРТОВАЯ ТОЧКА СПАВНА: абсолютный угол платформы на окружности.
+    // Раньше угол позиции был СУММОЙ startAngle + angleOffset + spawnPosition +
+    // zeroAngleDirection, поэтому слайдер Spawn Position не давал выбрать точную
+    // точку. Теперь Spawn Position — единственный источник правды: платформа
+    // ставится ровно туда, куда указывает этот угол, независимо от других настроек.
+    private float GetAbsoluteSpawnAngle(PlatformSettings settings)
+    {
+        return Mathf.Repeat(settings.spawnPosition, 360f);
+    }
 
     // Возвращает вектор и вращение в зависимости от выбранной плоскости
     private void GetPlaneVectors(float angle, out Vector3 outwardLocal, out Quaternion rotation)
@@ -229,7 +229,7 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             var settings = platforms[i];
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
-            float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition + zeroAngleDirection;
+            float positionAngle = GetAbsoluteSpawnAngle(settings);
 
             Vector3 outwardLocal;
             Quaternion localRotation;
@@ -244,8 +244,8 @@ public class SpiralStepSpawner : MonoBehaviour
             if (!Application.isPlaying) Undo.RegisterCreatedObjectUndo(platformObj, "Generate Platform");
 #endif
 
-            // Метка спавнера — на КАЖДУЮ платформу, даже на стоящую:
-            // раньше стоящие платформы нельзя было найти (у них нет RotatingPlatform)
+            // Метка спавнера — на КАЖДУЮ платформу, даже на стоячую:
+            // раньше стоячие платформы нельзя было найти (у них нет RotatingPlatform)
             // и они дублировались при Play
             if (platformObj.GetComponent<SpiralPlatformMarker>() == null)
             {
@@ -254,7 +254,7 @@ public class SpiralStepSpawner : MonoBehaviour
 
             // ФИЗИКА/КОЛЛИЗИИ: у префаба есть Rigidbody, но кинематичным его делает
             // только RotatingPlatform.Awake — то есть только вращающиеся платформы.
-            // Стоящая платформа с обычным Rigidbody падала под гравитацией,
+            // Стоячая платформа с обычным Rigidbody падала под гравитацией,
             // и её выталкивало коллайдером колонны (сбиты поворот, высота, позиция).
             // Поэтому каждую созданную платформу делаем кинематиком без гравитации.
             Rigidbody platformRb = platformObj.GetComponent<Rigidbody>();
@@ -315,7 +315,7 @@ public class SpiralStepSpawner : MonoBehaviour
             }
 
             spawnedPlatforms.Add(platformObj);
-            Debug.Log($"[6] Платформа #{i + 1} успешно создана!");
+            Debug.Log($"[6] Платформа #{i + 1} успешно создана! Абсолютный угол: {positionAngle}°");
         }
 
         Debug.Log($"=== [7] ГОТОВО. Сгенерировано {spawnedPlatforms.Count} платформ ===");
@@ -402,8 +402,7 @@ public class SpiralStepSpawner : MonoBehaviour
     private void CollectPlatformObjects(Transform root, List<GameObject> list)
     {
         foreach (Transform child in root)
-        
-{
+        {
             if (child.GetComponent<SpiralPlatformMarker>() != null ||
                 child.GetComponent<RotatingPlatform>() != null)
             {
@@ -420,6 +419,20 @@ public class SpiralStepSpawner : MonoBehaviour
     [ContextMenu("Clear Platform List")]
     public void ClearPlatformList() => platforms.Clear();
 
+    // Быстрый способ расставить стартовые точки: равномерно по всей окружности.
+    // Первая платформа — 0°, дальше с шагом 360°/кол-во платформ.
+    [ContextMenu("Distribute Evenly Around Column")]
+    public void DistributeEvenly()
+    {
+        if (platforms.Count == 0) return;
+        float step = 360f / platforms.Count;
+        for (int i = 0; i < platforms.Count; i++)
+        {
+            platforms[i].spawnPosition = Mathf.Repeat(i * step, 360f);
+        }
+        Debug.Log($"[Спавнер] Стартовые точки распределены равномерно: шаг {step}°.");
+    }
+
     private void OnDrawGizmos()
     {
         if (!showGizmos) return;
@@ -430,7 +443,7 @@ public class SpiralStepSpawner : MonoBehaviour
         foreach (var settings in platforms)
         {
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
-            float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition + zeroAngleDirection;
+            float positionAngle = GetAbsoluteSpawnAngle(settings);
             Vector3 outwardLocal, _;
             GetPlaneVectors(positionAngle, out outwardLocal, out _);
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
@@ -500,11 +513,16 @@ public class SpiralStepSpawnerEditor : Editor
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("СПИСОК ПЛАТФОРМ", EditorStyles.boldLabel);
 
+        EditorGUILayout.HelpBox("Start Angle каждой платформы — АБСОЛЮТНАЯ точка на окружности вокруг колонны (0-360°). Для плоскости XZ: 0 = вправо (X+), 90 = вперёд (Z+), 180 = влево (X-), 270 = назад (Z-). На позицию больше не влияют никакие другие настройки.", MessageType.Info);
+
         EditorGUILayout.BeginHorizontal();
         if (GUILayout.Button("ДОБАВИТЬ ПЛАТФОРМУ"))
         {
-     
-       spawner.AddPlatform();
+            spawner.AddPlatform();
+        }
+        if (GUILayout.Button("РАСПРЕДЕЛИТЬ РАВНОМЕРНО"))
+        {
+            spawner.DistributeEvenly();
         }
         if (GUILayout.Button("ОЧИСТИТЬ СПИСОК"))
         {
@@ -521,9 +539,8 @@ public class SpiralStepSpawnerEditor : Editor
             EditorGUILayout.LabelField($"Платформа #{i + 1}", EditorStyles.boldLabel);
 
             p.height = EditorGUILayout.FloatField("Height", p.height);
-            p.angleOffset = EditorGUILayout.FloatField("Angle Offset", p.angleOffset);
             p.customRadius = EditorGUILayout.FloatField("Custom Radius", p.customRadius);
-            p.spawnPosition = EditorGUILayout.Slider("Spawn Position", p.spawnPosition, 0f, 360f);
+            p.spawnPosition = EditorGUILayout.Slider("Start Angle (абсолют)", p.spawnPosition, 0f, 360f);
             // Галочка Enable Rotation показывается только в режиме Per Platform —
             // в глобальных режимах её состояние игнорируется
             if (spawner.rotationMode == SpiralStepSpawner.RotationMode.PerPlatform)
@@ -550,8 +567,6 @@ public class SpiralStepSpawnerEditor : Editor
         GUILayout.Label("ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
         spawner.defaultRadius = EditorGUILayout.FloatField("Default Radius", spawner.defaultRadius);
         spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset", spawner.rotationOffset);
-        spawner.startAngle = EditorGUILayout.FloatField("Start Angle", spawner.startAngle);
-        spawner.zeroAngleDirection = EditorGUILayout.Slider("Zero Angle Direction", spawner.zeroAngleDirection, 0f, 360f);
         spawner.autoFindColumn = EditorGUILayout.Toggle("Auto Find Column", spawner.autoFindColumn);
         spawner.rotationPlane = (SpiralStepSpawner.RotationPlane)EditorGUILayout.EnumPopup("Rotation Plane", spawner.rotationPlane);
         spawner.parentToColumn = EditorGUILayout.Toggle("Parent To Column", spawner.parentToColumn);
