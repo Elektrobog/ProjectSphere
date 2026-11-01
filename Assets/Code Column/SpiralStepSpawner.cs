@@ -190,9 +190,8 @@ public class SpiralStepSpawner : MonoBehaviour
             var settings = platforms[i];
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
             float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition + zeroAngleDirection;
-            float rotationAngle = startAngle + settings.angleOffset + zeroAngleDirection;
 
-            Quaternion spawnRotation = center.rotation * Quaternion.Euler(0f, 0f, -rotationAngle + 90f + rotationOffset);
+            Quaternion spawnRotation = center.rotation * Quaternion.Euler(0f, 0f, -positionAngle + 90f + rotationOffset);
 
             // Спавним префаб
             GameObject platformObj = Instantiate(platformPrefab, worldCenter, spawnRotation);
