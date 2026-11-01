@@ -32,6 +32,14 @@ public class SpiralStepSpawner : MonoBehaviour
         Box         // BoxCollider по габаритам меша (простой параллелепипед)
     }
 
+    // Плоскость вращения
+    public enum RotationPlane
+    {
+        XZ,  // Горизонтальная
+        XY,  // Вертикальная
+        YZ   // Горизонтальная
+    }
+
     [System.Serializable]
     public class PlatformSettings
     {
@@ -95,6 +103,11 @@ public class SpiralStepSpawner : MonoBehaviour
     [Range(0f, 360f)]
     public float zeroAngleDirection = 0f;
 
+
+    [Header("Плоскость вращения")]
+    [Tooltip("Выберите плоскость, в которой будут располагаться платформы")]
+    public RotationPlane rotationPlane = RotationPlane.XZ;
+
     private List<GameObject> spawnedPlatforms = new List<GameObject>();
 
     private Transform FindColumnCenter()
@@ -146,6 +159,31 @@ public class SpiralStepSpawner : MonoBehaviour
         }
     }
 
+
+    // Возвращает вектор и вращение в зависимости от выбранной плоскости
+    private void GetPlaneVectors(float angle, out Vector3 outwardLocal, out Quaternion rotation)
+    {
+        switch (rotationPlane)
+        {
+            case RotationPlane.XZ:
+                outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
+                rotation = Quaternion.Euler(0f, -angle + 90f + rotationOffset, 0f);
+                break;
+            case RotationPlane.XY:
+                outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad), 0f);
+                rotation = Quaternion.Euler(0f, 0f, -angle + 90f + rotationOffset);
+                break;
+            case RotationPlane.YZ:
+                outwardLocal = new Vector3(0f, Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad));
+                rotation = Quaternion.Euler(-angle + 90f + rotationOffset, 0f, 0f);
+                break;
+            default:
+                outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
+                rotation = Quaternion.Euler(0f, -angle + 90f + rotationOffset, 0f);
+                break;
+        }
+    }
+
     private void GeneratePlatformsInternal(bool destroyImmediate)
     {
         Debug.Log("=== [1] НАЧАЛО ГЕНЕРАЦИИ ===");
@@ -190,9 +228,11 @@ public class SpiralStepSpawner : MonoBehaviour
             var settings = platforms[i];
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
             float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition + zeroAngleDirection;
-            float rotationAngle = startAngle + settings.angleOffset + zeroAngleDirection;
 
-            Quaternion spawnRotation = center.rotation * Quaternion.Euler(0f, -positionAngle + 90f + rotationOffset, 0f);
+            Vector3 outwardLocal;
+            Quaternion localRotation;
+            GetPlaneVectors(positionAngle, out outwardLocal, out localRotation);
+            Quaternion spawnRotation = center.rotation * localRotation;
 
             // Спавним префаб
             GameObject platformObj = Instantiate(platformPrefab, worldCenter, spawnRotation);
@@ -235,7 +275,6 @@ public class SpiralStepSpawner : MonoBehaviour
                 continue;
             }
 
-            Vector3 outwardLocal = new Vector3(Mathf.Cos(positionAngle * Mathf.Deg2Rad), 0f, Mathf.Sin(positionAngle * Mathf.Deg2Rad));
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
 
             Bounds b = meshRenderer.bounds;
@@ -390,7 +429,8 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
             float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition + zeroAngleDirection;
-            Vector3 outwardLocal = new Vector3(Mathf.Cos(positionAngle * Mathf.Deg2Rad), 0f, Mathf.Sin(positionAngle * Mathf.Deg2Rad));
+            Vector3 outwardLocal, _;
+            GetPlaneVectors(positionAngle, out outwardLocal, out _);
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
             Vector3 pos = center.position + outwardWorld * effectiveRadius + Vector3.up * settings.height;
             Gizmos.DrawWireSphere(pos, 0.3f);
@@ -511,6 +551,7 @@ public class SpiralStepSpawnerEditor : Editor
         spawner.startAngle = EditorGUILayout.FloatField("Start Angle", spawner.startAngle);
         spawner.zeroAngleDirection = EditorGUILayout.Slider("Zero Angle Direction", spawner.zeroAngleDirection, 0f, 360f);
         spawner.autoFindColumn = EditorGUILayout.Toggle("Auto Find Column", spawner.autoFindColumn);
+        spawner.rotationPlane = (RotationPlane)EditorGUILayout.EnumPopup("Rotation Plane", spawner.rotationPlane);
         spawner.parentToColumn = EditorGUILayout.Toggle("Parent To Column", spawner.parentToColumn);
         spawner.defaultMaterial = (Material)EditorGUILayout.ObjectField("Default Material", spawner.defaultMaterial, typeof(Material), false);
         spawner.defaultColor = EditorGUILayout.ColorField("Default Color", spawner.defaultColor);
