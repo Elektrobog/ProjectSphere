@@ -54,8 +54,8 @@ public class SpiralStepSpawner : MonoBehaviour
     // Как поворачивать платформу при спавне относительно колонны
     public enum OrientationMode
     {
+        PrefabAsIs,     // Ровно тот поворот, что сохранён в префабе — по умолчанию, настройка один раз
         FlatFrontOut,   // Плашмя (как префаб), разворот вокруг вертикали «носом» от колонны
-        PrefabAsIs,     // Ровно тот поворот, что сохранён в префабе — вообще без поворота
         FrontFromColumn // «Перед» всегда строго от колонны (как лопасть колеса — для вертикальных колёс)
     }
 
@@ -99,7 +99,7 @@ public class SpiralStepSpawner : MonoBehaviour
 
     [Header("НАСТРОЙКИ ГЕНЕРАЦИИ")]
     public float defaultRadius = 3.4f;
-    [Tooltip("Доворот платформы вокруг направления от колонны — «перед» всегда остаётся направленным от колонны. 0 = перед смотрит ровно от колонны")]
+    [Tooltip("Доворот платформ. В режиме «Точно как префаб» — поворот ВСЕХ платформ сразу вокруг вертикальной оси (0 = ровно как в префабе). В остальных режимах — доворот относительно колонны.")]
     public float rotationOffset = 0f;
     public bool generateOnStart = true;
     public bool destroyPreviousOnGenerate = true;
@@ -123,8 +123,8 @@ public class SpiralStepSpawner : MonoBehaviour
     [Tooltip("Какая ось префаба — его «перед». Эта сторона платформы смотрит от колонны (в режимах «плашмя» и «лопасть»). Если платформа повёрнута не той стороной — попробуй другую ось.")]
     public FrontAxis frontAxis = FrontAxis.PlusZ;
 
-    [Tooltip("Плашмя, носом от колонны — платформа лежит параллельно полу (как префаб) и лишь разворачивается вокруг вертикальной оси передом от колонны. Точно как префаб — поворот берётся из префаба без изменений. Нос от колонны — «перед» всегда перпендикулярен окружности (для вертикальных «колёс»).")]
-    public OrientationMode orientationMode = OrientationMode.FlatFrontOut;
+    [Tooltip("Точно как префаб — платформа спавнится ровно с тем поворотом, с которым сохранён сам префаб: настроил один раз — все платформы на любых углах и колоннах стоят одинаково. Плашмя, носом от колонны — лежит как префаб и разворачивается передом от колонны. Нос от колонны — «перед» всегда перпендикулярен окружности (для вертикальных «колёс»).")]
+    public OrientationMode orientationMode = OrientationMode.PrefabAsIs;
 
     private List<GameObject> spawnedPlatforms = new List<GameObject>();
 
@@ -312,9 +312,11 @@ public class SpiralStepSpawner : MonoBehaviour
             Quaternion localRotation;
             GetPlaneVectors(positionAngle, out outwardLocal, out localRotation);
             // «Точно как префаб»: платформа спавнится ровно с тем поворотом,
-            // с которым сохранён сам префаб — никакой зависимости от угла и колонны
+            // с которым сохранён сам префаб, плюс один общий доворот (Rotation Offset)
+            // вокруг вертикали. Никакой зависимости от угла и колонны — настроил
+            // раз, и все платформы на всех колоннах стоят одинаково.
             Quaternion spawnRotation = orientationMode == OrientationMode.PrefabAsIs
-                ? platformPrefab.transform.rotation
+                ? Quaternion.Euler(0f, rotationOffset, 0f) * platformPrefab.transform.rotation
                 : center.rotation * localRotation;
 
             // Спавним префаб
@@ -393,10 +395,11 @@ public class SpiralStepSpawner : MonoBehaviour
                 // Ось орбиты = нормаль плоскости: в XY платформы крутятся вокруг Z
                 // (вертикальное «колесо»), в XZ — вокруг Y, как раньше
                 rotating.rotationAxis = GetPlaneNormal();
-                // В вертикальных плоскостях «плашмя»-платформы не кувыркаются на
-                // орбите — держат поворот, как кабинки колеса обозрения
-                rotating.keepOrientation = rotationPlane != RotationPlane.XZ
-                    && orientationMode != OrientationMode.FrontFromColumn;
+                // «Точно как префаб» — платформа всегда держит поворот префаба.
+                // В вертикальных плоскостях «плашмя»-платформы тоже не кувыркаются —
+                // держат поворот, как кабинки колеса обозрения
+                rotating.keepOrientation = orientationMode == OrientationMode.PrefabAsIs
+                    || (rotationPlane != RotationPlane.XZ && orientationMode != OrientationMode.FrontFromColumn);
                 rotating.Initialize(center);
                 rotating.angularSpeed = settings.rotationSpeed;
                 rotating.clockwise = settings.clockwise;
@@ -655,14 +658,17 @@ public class SpiralStepSpawnerEditor : Editor
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
         spawner.defaultRadius = EditorGUILayout.FloatField("Default Radius", spawner.defaultRadius);
-        spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset", spawner.rotationOffset);
+        spawner.rotationOffset = EditorGUILayout.FloatField("Доворот всех платформ (°)", spawner.rotationOffset);
         spawner.autoFindColumn = EditorGUILayout.Toggle("Auto Find Column", spawner.autoFindColumn);
         spawner.rotationPlane = (SpiralStepSpawner.RotationPlane)EditorGUILayout.EnumPopup("Rotation Plane", spawner.rotationPlane);
-        string[] frontAxisNames = { "Вперёд (Z+)", "Назад (Z-)", "Вверх (Y+)", "Вниз (Y-)", "Вправо (X+)", "Влево (X-)" };
-        spawner.frontAxis = (SpiralStepSpawner.FrontAxis)EditorGUILayout.Popup("Ось «переда» платформы", (int)spawner.frontAxis, frontAxisNames);
-        string[] orientationNames = { "Плашмя, носом от колонны", "Точно как префаб (без поворота)", "Нос от колонны (как лопасть)" };
+        string[] orientationNames = { "Точно как префаб (без поворота)", "Плашмя, носом от колонны", "Нос от колонны (как лопасть)" };
         spawner.orientationMode = (SpiralStepSpawner.OrientationMode)EditorGUILayout.Popup("Поворот платформы", (int)spawner.orientationMode, orientationNames);
-        EditorGUILayout.HelpBox("«Плашмя, носом от колонны» — платформа лежит параллельно полу (как префаб) и разворачивается вокруг вертикали передом от колонны. «Точно как префаб» — поворот из префаба, без изменений. «Нос от колонны» — перед всегда перпендикулярен окружности (для вертикальных «колёс»; плоская платформа в этом режиме лежит на боку).", MessageType.None);
+        EditorGUILayout.HelpBox("«Точно как префаб» — платформа спавнится ровно с тем поворотом, с которым сохранён сам префаб: настроил префаб один раз — и ВСЕ платформы, на любых углах и любых колоннах, стоят одинаково. «Плашмя, носом от колонны» — лежит как префаб и разворачивается передом от колонны. «Нос от колонны» — перед всегда перпендикулярен окружности (для вертикальных «колёс»).", MessageType.None);
+        if (spawner.orientationMode != SpiralStepSpawner.OrientationMode.PrefabAsIs)
+        {
+            string[] frontAxisNames = { "Вперёд (Z+)", "Назад (Z-)", "Вверх (Y+)", "Вниз (Y-)", "Вправо (X+)", "Влево (X-)" };
+            spawner.frontAxis = (SpiralStepSpawner.FrontAxis)EditorGUILayout.Popup("Ось «переда» платформы", (int)spawner.frontAxis, frontAxisNames);
+        }
         spawner.parentToColumn = EditorGUILayout.Toggle("Parent To Column", spawner.parentToColumn);
         spawner.defaultMaterial = (Material)EditorGUILayout.ObjectField("Default Material", spawner.defaultMaterial, typeof(Material), false);
         spawner.defaultColor = EditorGUILayout.ColorField("Default Color", spawner.defaultColor);
