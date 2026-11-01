@@ -184,9 +184,10 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             var settings = platforms[i];
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
-            float angle = startAngle + settings.angleOffset + settings.spawnPosition;
+            float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition;
+            float rotationAngle = startAngle + settings.angleOffset;
 
-            Quaternion spawnRotation = center.rotation * Quaternion.Euler(0f, -angle + 90f + rotationOffset, 0f);
+            Quaternion spawnRotation = center.rotation * Quaternion.Euler(0f, -rotationAngle + 90f + rotationOffset, 0f);
 
             // Спавним префаб
             GameObject platformObj = Instantiate(platformPrefab, worldCenter, spawnRotation);
@@ -229,7 +230,7 @@ public class SpiralStepSpawner : MonoBehaviour
                 continue;
             }
 
-            Vector3 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
+            Vector3 outwardLocal = new Vector3(Mathf.Cos(positionAngle * Mathf.Deg2Rad), 0f, Mathf.Sin(positionAngle * Mathf.Deg2Rad));
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
 
             Bounds b = meshRenderer.bounds;
@@ -383,8 +384,8 @@ public class SpiralStepSpawner : MonoBehaviour
         foreach (var settings in platforms)
         {
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
-            float angle = startAngle + settings.angleOffset + settings.spawnPosition;
-            Vector3 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
+            float positionAngle = startAngle + settings.angleOffset + settings.spawnPosition;
+            Vector3 outwardLocal = new Vector3(Mathf.Cos(positionAngle * Mathf.Deg2Rad), 0f, Mathf.Sin(positionAngle * Mathf.Deg2Rad));
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
             Vector3 pos = center.position + outwardWorld * effectiveRadius + Vector3.up * settings.height;
             Gizmos.DrawWireSphere(pos, 0.3f);
