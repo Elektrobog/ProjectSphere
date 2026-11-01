@@ -5,6 +5,8 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
 {
     [Header("Rotation Settings")]
     public Transform rotationCenter;
+    [Tooltip("Ось орбиты вокруг центра. Для плоскости XZ — (0,1,0), для вертикальной XY — (0,0,1). Спавнер выставляет автоматически по выбранной плоскости.")]
+    public Vector3 rotationAxis = Vector3.up;
     public float angularSpeed = 30f;
     public bool clockwise = true;
 
@@ -43,9 +45,10 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
         float deltaAngle = angularSpeed * direction * Time.fixedDeltaTime;
         accumulatedAngle += deltaAngle;
 
-        Vector3 rotatedOffset = Quaternion.Euler(0f, accumulatedAngle, 0f) * initialLocalOffset;
+        Quaternion orbit = Quaternion.AngleAxis(accumulatedAngle, rotationAxis.normalized);
+        Vector3 rotatedOffset = orbit * initialLocalOffset;
         rb.MovePosition(rotationCenter.position + rotatedOffset);
-        rb.MoveRotation(Quaternion.Euler(0f, accumulatedAngle, 0f) * initialRotation);
+        rb.MoveRotation(orbit * initialRotation);
     }
 
     public Vector3 GetVelocityAtPoint(Vector3 worldPoint)
@@ -53,12 +56,12 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
         if (rotationCenter == null) return Vector3.zero;
         Vector3 radius = worldPoint - rotationCenter.position;
         float omega = AngularSpeedRad * (clockwise ? -1f : 1f);
-        return Vector3.Cross(new Vector3(0f, omega, 0f), radius);
+        return Vector3.Cross(rotationAxis.normalized * omega, radius);
     }
 
     public Vector3 GetAngularVelocity()
     {
         float omega = AngularSpeedRad * (clockwise ? -1f : 1f);
-        return new Vector3(0f, omega, 0f);
+        return rotationAxis.normalized * omega;
     }
 }
