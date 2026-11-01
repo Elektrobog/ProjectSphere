@@ -444,8 +444,9 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             float effectiveRadius = settings.customRadius > 0 ? settings.customRadius : defaultRadius;
             float positionAngle = GetAbsoluteSpawnAngle(settings);
-            Vector3 outwardLocal, _;
-            GetPlaneVectors(positionAngle, out outwardLocal, out _);
+            Vector3 outwardLocal;
+            Quaternion gizmoRotation;
+            GetPlaneVectors(positionAngle, out outwardLocal, out gizmoRotation);
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
             Vector3 pos = center.position + outwardWorld * effectiveRadius + Vector3.up * settings.height;
             Gizmos.DrawWireSphere(pos, 0.3f);
