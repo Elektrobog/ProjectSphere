@@ -44,8 +44,7 @@ public class BallController : MonoBehaviour
 
     [Tooltip("Через сколько секунд скорость после отпускания ввода достигает максимума (gripSmoothTimeMax)")]
     public float gripRampDuration = 0.6f;
-    [Tooltip("Ещё один параметр: если скорость ниже этого порога, то с
-цепление срабатывает сразу без задержки (не ждём gripRampDuration)")]
+    [Tooltip("Ещё один параметр: если скорость ниже этого порога, то сцепление срабатывает сразу без задержки (не ждём gripRampDuration)")]
     public float gripVelocityThreshold = 0.5f;
 
     [Header("Position Anchor (Устраняет сползание при вращении платформы)")]
