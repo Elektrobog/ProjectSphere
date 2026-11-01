@@ -28,7 +28,8 @@ public class SpiralStepSpawner : MonoBehaviour
     // Какой коллайдер ставить платформе, если у неё нет ни одного
     public enum AutoColliderMode
     {
-        ConvexMesh, // выпуклый MeshCollider — повторяет форму меша платформы
+        TopDisc,    // цилиндр по ВЕРХНЕЙ поверхности платформы — шар падает ровно с видимого края
+        ConvexMesh, // выпуклый MeshCollider — повторяет форму меша, но у скруглённых платформ верх выходит за видимый край
         Box         // BoxCollider по габаритам меша (простой параллелепипед)
     }
 
@@ -58,8 +59,8 @@ public class SpiralStepSpawner : MonoBehaviour
     public RotationMode rotationMode = RotationMode.PerPlatform;
 
     [Header("КОЛЛИЗИИ")]
-    [Tooltip("Какой коллайдер ставить платформе, если у префаба нет ни одного: Convex Mesh — повторяет форму меша, Box — параллелепипед по габаритам")]
-    public AutoColliderMode autoColliderMode = AutoColliderMode.ConvexMesh;
+    [Tooltip("Какой коллайдер ставить платформе, если у префаба нет ни одного: Top Disc — цилиндр по верхней дорожке (шар падает с видимого края), Convex Mesh — выпуклая оболочка меша, Box — параллелепипед")]
+    public AutoColliderMode autoColliderMode = AutoColliderMode.TopDisc;
 
     [Header("ЦЕНТР КОЛОННЫ")]
     public Transform columnCenter;
@@ -276,6 +277,16 @@ public class SpiralStepSpawner : MonoBehaviour
     // поэтому выпуклая оболочка — потолок точности, точнее только свой коллайдер в префабе.
     private void AddAutoCollider(GameObject platformObj, int index)
     {
+        // Лучший режим: цилиндр по верхней "дорожке" платформы. Convex MeshCollider
+        // у скруглённой платформы расплющивает верх до самой широкой точки меша —
+        // шар получает невидимую полку за краем и не падает. Top Disc строит
+        // цилиндр по фактическому радиусу верхней поверхности (с запасом 2% внутрь).
+        if (autoColliderMode == AutoColliderMode.TopDisc)
+        {
+            if (TryAddTopDiscCollider(platformObj, index)) return;
+            Debug.LogWarning($"[Спавнер] Платформе #{index} не удалось построить цилиндр-коллайдер (Top Disc) — пробую Convex Mesh.");
+        }
+
         if (autoColliderMode == AutoColliderMode.ConvexMesh)
         {
             MeshFilter mf = platformObj.GetComponentInChildren<MeshFilter>();
@@ -302,6 +313,75 @@ public class SpiralStepSpawner : MonoBehaviour
             box.size = hi - lo;
             Debug.Log($"[Спавнер] Платформе #{index} добавлен BoxCollider по мешу.");
         }
+    }
+
+    // Строит цилиндр-коллайдер по верхней поверхности платформы.
+    // Радиус берём из вершин меша, находящихся в верхних 10% высоты, и сжимаем на 2%.
+    private bool TryAddTopDiscCollider(GameObject platformObj, int index)
+    {
+        MeshFilter mf = platformObj.GetComponentInChildren<MeshFilter>();
+        if (mf == null || mf.sharedMesh == null) return false;
+
+        Mesh mesh = mf.sharedMesh;
+        Vector3[] vertices;
+        try { vertices = mesh.vertices; }
+        catch { return false; } // меш без Read/Write — уходим в Convex Mesh
+
+        // Верхняя поверхность: вершины в верхних 10% высоты меша (в локальных координатах меша)
+        Bounds mb = mesh.bounds;
+        float yTop = mb.max.y - mb.size.y * 0.10f;
+        float radius = 0f;
+        bool found = false;
+        foreach (Vector3 v in vertices)
+        {
+            if (v.y < yTop) continue;
+            float r = Mathf.Sqrt(v.x * v.x + v.z * v.z);
+            if (!found || r > radius) { radius = r; found = true; }
+        }
+        if (!found || radius < 0.05f) return false;
+
+        radius *= 0.98f; // небольшой запас внутрь, чтобы шар отпускался у самого края
+
+        Mesh cylinder = BuildCylinderMesh(radius, mb.min.y, mb.max.y, 20);
+        MeshCollider mc = mf.gameObject.AddComponent<MeshCollider>();
+        mc.sharedMesh = cylinder;
+        mc.convex = true;
+        Debug.Log($"[Спавнер] Платформе #{index} добавлен цилиндр-коллайдер Top Disc (радиус {radius:F2}).");
+        return true;
+    }
+
+    // Низкополигональный цилиндр для convex MeshCollider
+    private Mesh BuildCylinderMesh(float radius, float y0, float y1, int segments)
+    {
+        Vector3[] verts = new Vector3[segments * 2 + 2];
+        for (int i = 0; i < segments; i++)
+        {
+            float a = i / (float)segments * Mathf.PI * 2f;
+            float x = Mathf.Cos(a) * radius;
+            float z = Mathf.Sin(a) * radius;
+            verts[i] = new Vector3(x, y0, z);
+            verts[i + segments] = new Vector3(x, y1, z);
+        }
+        int bottomCenter = segments * 2;
+        int topCenter = bottomCenter + 1;
+        verts[bottomCenter] = new Vector3(0f, y0, 0f);
+        verts[topCenter] = new Vector3(0f, y1, 0f);
+
+        int[] tris = new int[segments * 6];
+        int t = 0;
+        for (int i = 0; i < segments; i++)
+        {
+            int j = (i + 1) % segments;
+            tris[t++] = i; tris[t++] = j; tris[t++] = j + segments;
+            tris[t++] = i; tris[t++] = j + segments; tris[t++] = i + segments;
+        }
+
+        Mesh m = new Mesh();
+        m.SetVertices(verts);
+        m.SetTriangles(tris, 0);
+        m.RecalculateNormals();
+        m.RecalculateBounds();
+        return m;
     }
 
     [ContextMenu("Clear Platforms")]
