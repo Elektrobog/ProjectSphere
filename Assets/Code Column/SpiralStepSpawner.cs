@@ -48,7 +48,7 @@ public class SpiralStepSpawner : MonoBehaviour
         public float customRadius = 0f;
 
         [Header("Стартовая точка спавна")]
-        [Tooltip("АБСОЛЮТНАЯ точка на окружности вокруг колонны (в градусах, 0-360). НЕ зависит от других настроек. Для плоскости XZ: 0 = вправо (X+), 90 = вперёд (Z+), 180 = влево (X-), 270 = назад (Z-).")]
+        [Tooltip("Угол платформы (°) ОТ СТАРТОВОЙ ТОЧКИ. Итоговый угол = Start Angle + это значение. Для плоскости XZ: 0 = вправо (X+), 90 = вперёд (Z+), 180 = влево (X-), 270 = назад (Z-).")]
         [Range(0f, 360f)]
         public float spawnPosition = 0f;
 
@@ -82,6 +82,9 @@ public class SpiralStepSpawner : MonoBehaviour
     public float defaultRadius = 3.4f;
     [Tooltip("Поворот САМОЙ платформы вокруг своей оси (не влияет на позицию на окружности)")]
     public float rotationOffset = 0f;
+
+    [Tooltip("Стартовая точка на окружности (0-360°). Итоговый угол каждой платформы = Start Angle + её «Угол» из списка. Меняешь Start Angle — вся карусель платформ сдвигается вокруг колонны.")]
+    public float startAngle = 0f;
     public bool generateOnStart = true;
     public bool destroyPreviousOnGenerate = true;
 
@@ -152,14 +155,11 @@ public class SpiralStepSpawner : MonoBehaviour
         }
     }
 
-    // СТАРТОВАЯ ТОЧКА СПАВНА: абсолютный угол платформы на окружности.
-    // Раньше угол позиции был СУММОЙ startAngle + angleOffset + spawnPosition +
-    // zeroAngleDirection, поэтому слайдер Spawn Position не давал выбрать точную
-    // точку. Теперь Spawn Position — единственный источник правды: платформа
-    // ставится ровно туда, куда указывает этот угол, независимо от других настроек.
+    // ИТОГОВЫЙ УГОЛ ПЛАТФОРМЫ = Start Angle (стартовая точка) + «Угол» платформы.
+    // Механика из присланного варианта: angle = startAngle + angleOffset.
     private float GetAbsoluteSpawnAngle(PlatformSettings settings)
     {
-        return Mathf.Repeat(settings.spawnPosition, 360f);
+        return Mathf.Repeat(startAngle + settings.spawnPosition, 360f);
     }
 
     // Возвращает вектор и вращение в зависимости от выбранной плоскости
@@ -169,7 +169,8 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             case SpiralStepSpawner.RotationPlane.XZ:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
-                rotation = Quaternion.Euler(0f, -angle + 90f + rotationOffset, 0f);
+                // Ровно как в присланном варианте: Quaternion.Euler(0, угол, 0)
+                rotation = Quaternion.Euler(0f, angle + rotationOffset, 0f);
                 break;
             case SpiralStepSpawner.RotationPlane.XY:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad), 0f);
@@ -514,7 +515,7 @@ public class SpiralStepSpawnerEditor : Editor
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("СПИСОК ПЛАТФОРМ", EditorStyles.boldLabel);
 
-        EditorGUILayout.HelpBox("Start Angle каждой платформы — АБСОЛЮТНАЯ точка на окружности вокруг колонны (0-360°). Для плоскости XZ: 0 = вправо (X+), 90 = вперёд (Z+), 180 = влево (X-), 270 = назад (Z-). На позицию больше не влияют никакие другие настройки.", MessageType.Info);
+        EditorGUILayout.HelpBox("Итоговый угол каждой платформы = Start Angle (стартовая точка, в доп. настройках) + «Угол» платформы из списка. Пример: Start Angle = 0, угол платформы = 90 — платформа встанет на 90° от стартовой точки по окружности колонны (XZ: 0 = вправо X+, 90 = вперёд Z+). Поворот платформы = по углу + Rotation Offset.", MessageType.Info);
 
         EditorGUILayout.BeginHorizontal();
         if (GUILayout.Button("ДОБАВИТЬ ПЛАТФОРМУ"))
@@ -541,7 +542,7 @@ public class SpiralStepSpawnerEditor : Editor
 
             p.height = EditorGUILayout.FloatField("Height", p.height);
             p.customRadius = EditorGUILayout.FloatField("Custom Radius", p.customRadius);
-            p.spawnPosition = EditorGUILayout.Slider("Start Angle (абсолют)", p.spawnPosition, 0f, 360f);
+            p.spawnPosition = EditorGUILayout.Slider("Угол (° от стартовой точки)", p.spawnPosition, 0f, 360f);
             // Галочка Enable Rotation показывается только в режиме Per Platform —
             // в глобальных режимах её состояние игнорируется
             if (spawner.rotationMode == SpiralStepSpawner.RotationMode.PerPlatform)
@@ -568,6 +569,7 @@ public class SpiralStepSpawnerEditor : Editor
         GUILayout.Label("ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
         spawner.defaultRadius = EditorGUILayout.FloatField("Default Radius", spawner.defaultRadius);
         spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset", spawner.rotationOffset);
+        spawner.startAngle = EditorGUILayout.Slider("Start Angle (стартовая точка)", spawner.startAngle, 0f, 360f);
         spawner.autoFindColumn = EditorGUILayout.Toggle("Auto Find Column", spawner.autoFindColumn);
         spawner.rotationPlane = (SpiralStepSpawner.RotationPlane)EditorGUILayout.EnumPopup("Rotation Plane", spawner.rotationPlane);
         spawner.parentToColumn = EditorGUILayout.Toggle("Parent To Column", spawner.parentToColumn);
