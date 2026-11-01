@@ -65,6 +65,9 @@ public class BallController : MonoBehaviour
     public bool platformRelativeControl = true;
     [Tooltip("Отзывчивость руления: ускорение (м/с²) на каждый м/с разницы до целевой скорости. Больше = резче")]
     public float platformSteeringStrength = 8f;
+    [Tooltip("Множитель максимальной скорости на движущейся платформе (0.6 = 60% от Max Speed, чтобы шар не казался слишком быстрым)")]
+    [Range(0.1f, 1f)]
+    public float platformSpeedScale = 0.6f;
 
     [Header("Air Control")]
     [Tooltip("Множитель силы управления в воздухе от torqueStrength")]
@@ -300,7 +303,7 @@ public class BallController : MonoBehaviour
                         // Целевая скорость = скорость платформы в точке шара +
                         // направление нажатия * maxSpeed. Шар катится ровно туда,
                         // куда нажали, как бы платформа ни двигалась и ни вращалась.
-                        Vector3 targetVel = pVel + moveDir * maxSpeed;
+                        Vector3 targetVel = pVel + moveDir * maxSpeed * platformSpeedScale;
                         Vector3 currentHoriz = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
                         Vector3 targetHoriz = new Vector3(targetVel.x, 0f, targetVel.z);
                         Vector3 delta = targetHoriz - currentHoriz;
@@ -308,7 +311,7 @@ public class BallController : MonoBehaviour
 
                         // Визуальное качение: лёгкий крутящий момент, чтобы шар сразу вращался
                         Vector3 spinAxis = Vector3.Cross(Vector3.up, moveDir);
-                        rb.AddTorque(spinAxis * torqueStrength * 0.5f * control * finalTorqueMultiplier, ForceMode.Acceleration);
+                        rb.AddTorque(spinAxis * torqueStrength * 0.25f * control * finalTorqueMultiplier, ForceMode.Acceleration);
                     }
                     else
                     {
