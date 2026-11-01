@@ -12,6 +12,8 @@ GameObject:
   - component: {fileID: 6741860859432483212}
   - component: {fileID: 4552194118223211558}
   - component: {fileID: 4708344735679792931}
+  - component: {fileID: 8214494653746833463}
+  - component: {fileID: 472078835367399613}
   m_Layer: 0
   m_Name: "\u043A\u043E\u043B\u043B\u043E\u043D\u0430 1"
   m_TagString: Untagged
@@ -104,16 +106,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d3c6369bda9c8674e834c7bb6f054592, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpiralStepSpawner
-  platformPrefab: {fileID: 0}
+  platformPrefab: {fileID: 1711225138979225855, guid: 8430359bcb394ce409f0a29af892a23a, type: 3}
   rotationMode: 0
-  columnCenter: {fileID: 0}
+  autoColliderMode: 0
+  columnCenter: {fileID: 8233656343908643061}
   autoFindColumn: 1
   columnSearchNames:
   - Column
   - Column_Full
   - MainColumn
-  defaultRadius: 3.4
-  rotationOffset: 0
+  defaultRadius: 3.7
+  rotationOffset: 90
   startAngle: 0
   generateOnStart: 1
   destroyPreviousOnGenerate: 1
@@ -123,3 +126,45 @@ MonoBehaviour:
   parentToColumn: 1
   showGizmos: 1
   gizmoColor: {r: 0, g: 1, b: 1, a: 1}
+--- !u!114 &8214494653746833463
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4596482899780493526}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd8074d4b88bbee44af8afd675961ab7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlatformGlowIndicator
+  glowRenderers: []
+  platform: {fileID: 0}
+  materialName: GlowMat 1
+  idleColor: {r: 1, g: 0.1, b: 0.05, a: 1}
+  rotatingColor: {r: 0.1, g: 1, b: 0.2, a: 1}
+  emissionIntensity: 1.5
+  lerpSpeed: 4
+  rescanInterval: 0.5
+--- !u!64 &472078835367399613
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4596482899780493526}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 1
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 6972806499995798207, guid: d8691be9b51ef4345b7333b778b8030c, type: 3}

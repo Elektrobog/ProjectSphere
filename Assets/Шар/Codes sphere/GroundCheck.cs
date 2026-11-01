@@ -1,31 +1,28 @@
 ﻿using UnityEngine;
 
-// Гарантирует, что GroundCheck.FixedUpdate() выполнится раньше BallController,
-// BallSlopeSlide и BallJump в этом же физическом кадре — иначе Unity не даёт
-// гарантий порядка между компонентами без явного execution order,
-// и IsGrounded/GroundNormal могут "отставать" на один тик.
 [DefaultExecutionOrder(-100)]
 public class GroundCheck : MonoBehaviour
 {
     [Header("Настройки проверки")]
     [SerializeField] private LayerMask groundLayer = -1;
     [SerializeField] public float checkRadius = 0.5f;
-    [Tooltip("Максимальный угол, при котором поверхность вообще считается 'землёй' (IsGrounded = true). " +
-             "Должен быть БОЛЬШЕ, чем maxSlopeAngle в BallSlopeSlide — иначе зона скольжения " +
-             "никогда не наступит, т.к. шар перестаёт считаться заземлённым раньше, чем должен начать скользить.")]
     [SerializeField] private float maxGroundAngle = 60f;
     [SerializeField] private float rayLengthExtra = 0.2f;
     [SerializeField] private int rayCount = 8;
-    [SerializeField] private float steepAngleThreshold = 30f; // гибкий порог крутизны
+    [SerializeField] private float steepAngleThreshold = 30f;
+
     [Header("Отладка")]
     [SerializeField] private bool drawDebugRays = false;
+
     public bool IsGrounded { get; private set; }
+    public bool IsCenterOverGround { get; private set; } // ✅ НОВОЕ
     public bool JustLanded { get; private set; }
     public Vector3 GroundNormal { get; private set; }
     public float GroundAngle { get; private set; }
     public Collider GroundCollider { get; private set; }
     public float LastGroundedTime { get; private set; }
     public float MaxGroundAngle => maxGroundAngle;
+
     void FixedUpdate()
     {
         bool wasGrounded = IsGrounded;
@@ -33,23 +30,31 @@ public class GroundCheck : MonoBehaviour
         JustLanded = IsGrounded && !wasGrounded;
         if (JustLanded) LastGroundedTime = Time.time;
     }
+
     private bool CheckGround()
     {
         GroundNormal = Vector3.up;
         GroundAngle = 0f;
         GroundCollider = null;
+        IsCenterOverGround = false; // Сбрасываем
+
         float rayLength = checkRadius + rayLengthExtra;
         int hitCount = 0;
         Vector3 averageNormal = Vector3.zero;
+
+        // 1. Центральный луч (строго вниз)
         if (Physics.Raycast(transform.position, Vector3.down, out RaycastHit centerHit, rayLength, groundLayer))
         {
             if (IsValidGround(centerHit.normal))
             {
+                IsCenterOverGround = true; // ✅ Если луч попал — центр на земле
                 hitCount++;
                 averageNormal += centerHit.normal;
                 GroundCollider = centerHit.collider;
             }
         }
+
+        // 2. Лучи по кругу
         for (int i = 0; i < rayCount; i++)
         {
             float angle = i * (360f / rayCount);
@@ -65,6 +70,7 @@ public class GroundCheck : MonoBehaviour
                 }
             }
         }
+
         if (hitCount > 0)
         {
             GroundNormal = (averageNormal / hitCount).normalized;
@@ -73,12 +79,15 @@ public class GroundCheck : MonoBehaviour
         }
         return false;
     }
+
     private bool IsValidGround(Vector3 normal)
     {
         return Vector3.Angle(Vector3.up, normal) <= maxGroundAngle;
     }
+
     public bool IsSteepSlope() => IsGrounded && GroundAngle > steepAngleThreshold;
     public bool IsOnWall() => !IsGrounded || GroundAngle > maxGroundAngle;
+
     public void ForceUnground()
     {
         IsGrounded = false;
@@ -86,16 +95,5 @@ public class GroundCheck : MonoBehaviour
         GroundCollider = null;
         GroundNormal = Vector3.up;
         GroundAngle = 0f;
-    }
-    void OnDrawGizmosSelected()
-    {
-        if (!drawDebugRays) return;
-        Gizmos.color = IsGrounded ? Color.green : Color.red;
-        Gizmos.DrawWireSphere(transform.position, checkRadius);
-        if (IsGrounded)
-        {
-            Gizmos.color = Color.blue;
-            Gizmos.DrawLine(transform.position, transform.position + GroundNormal * 2f);
-        }
     }
 }
