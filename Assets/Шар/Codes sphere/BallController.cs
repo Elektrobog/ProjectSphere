@@ -334,6 +334,16 @@ public class BallController : MonoBehaviour
             }
             else if (ground.IsGrounded && activePlatform != null)
             {
+                // Если шар выехал за габариты платформы — отпускаем его:
+                // якорь и сцепление не должны "приклеивать" шар к краю
+                if (!IsOverPlatformFootprint())
+                {
+                    hasAnchor = false;
+                    LimitVelocity(pVel);
+                    ApplyExtraGravity();
+                    return;
+                }
+
                 // ---- ПАССИВНОЕ СЦЕПЛЕНИЕ (GRIP) ----
                 float timeSinceMove = Time.time - lastMoveTime;
                 Vector3 relativeVel = rb.linearVelocity - pVel;
@@ -456,6 +466,22 @@ public class BallController : MonoBehaviour
         
         // 6. Дополнительная гравитация
         ApplyExtraGravity();
+    }
+
+    // Проверка: шар ещё над платформой? Сравниваем горизонтальную дистанцию
+    // от центра платформы с её радиусом по коллайдеру (с небольшим запасом внутрь).
+    // Если шар выехал за край — якорь/сцепление отключаются, и он падает честно.
+    private bool IsOverPlatformFootprint()
+    {
+        if (activePlatformTransform == null) return false;
+        Collider col = activePlatformTransform.GetComponentInChildren<Collider>();
+        if (col == null) return true; // нет коллайдера — не мешаем прежней логике
+        Vector3 c = col.bounds.center;
+        Vector3 e = col.bounds.extents;
+        float radius = Mathf.Max(e.x, e.z);
+        Vector3 d = rb.position - c;
+        d.y = 0f;
+        return d.magnitude <= radius * 0.95f;
     }
 
     private void ApplyBraking(Vector3 pVel, Vector3 pAngVel)
