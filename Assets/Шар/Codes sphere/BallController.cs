@@ -60,6 +60,12 @@ public class BallController : MonoBehaviour
     [Tooltip("Предел сцепления (м/с²). Пока центробежное ускорение (ω²·R) ниже — шар надёжно держится на платформе; выше — якорь отпускает и шар сносится наружу")]
     public float centrifugalGripLimit = 5f;
 
+    [Header("Platform Steering (Управление на движущихся платформах)")]
+    [Tooltip("Включено: на движущейся платформе шар рулится напрямую к скорости 'платформа + нажатие', и платформа не может свернуть его в сторону. На обычном полу всё остаётся как было")]
+    public bool platformRelativeControl = true;
+    [Tooltip("Отзывчивость руления: ускорение (м/с²) на каждый м/с разницы до целевой скорости. Больше = резче")]
+    public float platformSteeringStrength = 8f;
+
     [Header("Air Control")]
     [Tooltip("Множитель силы управления в воздухе от torqueStrength")]
     [Range(0f, 1f)] public float airControlFactor = 0.2f;
@@ -288,9 +294,28 @@ public class BallController : MonoBehaviour
             {
                 if (ground.IsGrounded)
                 {
-                    // На земле - качение через крутящий момент
-                    Vector3 torqueAxis = Vector3.Cross(Vector3.up, moveDir);
-                    rb.AddTorque(torqueAxis * torqueStrength * control * finalTorqueMultiplier, ForceMode.Acceleration);
+                    if (platformRelativeControl && activePlatform != null)
+                    {
+                        // ---- РУЛЕНИЕ ОТНОСИТЕЛЬНО ПЛАТФОРМЫ ----
+                        // Целевая скорость = скорость платформы в точке шара +
+                        // направление нажатия * maxSpeed. Шар катится ровно туда,
+                        // куда нажали, как бы платформа ни двигалась и ни вращалась.
+                        Vector3 targetVel = pVel + moveDir * maxSpeed;
+                        Vector3 currentHoriz = new Vector3(rb.linearVelocity.x, 0f, rb.linearVelocity.z);
+                        Vector3 targetHoriz = new Vector3(targetVel.x, 0f, targetVel.z);
+                        Vector3 delta = targetHoriz - currentHoriz;
+                        rb.AddForce(delta * platformSteeringStrength * control * finalTorqueMultiplier, ForceMode.Acceleration);
+
+                        // Визуальное качение: лёгкий крутящий момент, чтобы шар сразу вращался
+                        Vector3 spinAxis = Vector3.Cross(Vector3.up, moveDir);
+                        rb.AddTorque(spinAxis * torqueStrength * 0.5f * control * finalTorqueMultiplier, ForceMode.Acceleration);
+                    }
+                    else
+                    {
+                        // На земле без движущейся платформы - качение через крутящий момент (как раньше)
+                        Vector3 torqueAxis = Vector3.Cross(Vector3.up, moveDir);
+                        rb.AddTorque(torqueAxis * torqueStrength * control * finalTorqueMultiplier, ForceMode.Acceleration);
+                    }
                 }
                 else
                 {
