@@ -198,6 +198,24 @@ public class SpiralStepSpawner : MonoBehaviour
             platformRb.isKinematic = true;
             platformRb.useGravity = false;
 
+            // КОЛЛАЙДЕР: Rigidbody без коллайдера бесполезен — шар просто проваливался
+            // сквозь платформу. Если у префаба нет ни одного коллайдера — ставим
+            // BoxCollider по размерам меша платформы
+            Collider platformCol = platformObj.GetComponentInChildren<Collider>();
+            if (platformCol == null)
+            {
+                Renderer colRend = platformObj.GetComponentInChildren<Renderer>();
+                if (colRend != null)
+                {
+                    BoxCollider box = platformObj.AddComponent<BoxCollider>();
+                    Vector3 lo = platformObj.transform.InverseTransformPoint(colRend.bounds.min);
+                    Vector3 hi = platformObj.transform.InverseTransformPoint(colRend.bounds.max);
+                    box.center = (lo + hi) * 0.5f;
+                    box.size = hi - lo;
+                    Debug.Log($"[Спавнер] У платформы #{i + 1} не было коллайдера — добавлен BoxCollider по мешу.");
+                }
+            }
+
             Renderer meshRenderer = platformObj.GetComponentInChildren<Renderer>();
             if (meshRenderer == null)
             {
