@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 8233656343908643061}
   - component: {fileID: 6741860859432483212}
   - component: {fileID: 4552194118223211558}
+  - component: {fileID: 4708344735679792931}
   m_Layer: 0
   m_Name: "\u043A\u043E\u043B\u043B\u043E\u043D\u0430 1"
   m_TagString: Untagged
@@ -26,13 +27,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4596482899780493526}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.7071068, y: 0, z: -0, w: 0.7071067}
+  m_LocalRotation: {x: -0.7069834, y: 0, z: 0, w: 0.7072302}
   m_LocalPosition: {x: 37.102776, y: -0.022031346, z: 31.138714}
   m_LocalScale: {x: 100, y: 100, z: 100}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -89.98, y: 0, z: 0}
 --- !u!33 &6741860859432483212
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -91,3 +92,34 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!114 &4708344735679792931
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4596482899780493526}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3c6369bda9c8674e834c7bb6f054592, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SpiralStepSpawner
+  platformPrefab: {fileID: 0}
+  rotationMode: 0
+  columnCenter: {fileID: 0}
+  autoFindColumn: 1
+  columnSearchNames:
+  - Column
+  - Column_Full
+  - MainColumn
+  defaultRadius: 3.4
+  rotationOffset: 0
+  startAngle: 0
+  generateOnStart: 1
+  destroyPreviousOnGenerate: 1
+  platforms: []
+  defaultMaterial: {fileID: 0}
+  defaultColor: {r: 0.75, g: 0.78, b: 0.85, a: 1}
+  parentToColumn: 1
+  showGizmos: 1
+  gizmoColor: {r: 0, g: 1, b: 1, a: 1}
