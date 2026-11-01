@@ -40,6 +40,8 @@ public class SpiralStepSpawner : MonoBehaviour
         YZ   // Горизонтальная
     }
 
+
+
     [System.Serializable]
     public class PlatformSettings
     {
@@ -106,7 +108,7 @@ public class SpiralStepSpawner : MonoBehaviour
 
     [Header("Плоскость вращения")]
     [Tooltip("Выберите плоскость, в которой будут располагаться платформы")]
-    public RotationPlane rotationPlane = RotationPlane.XZ;
+    public SpiralStepSpawner.RotationPlane rotationPlane = SpiralStepSpawner.RotationPlane.XZ;
 
     private List<GameObject> spawnedPlatforms = new List<GameObject>();
 
@@ -165,15 +167,15 @@ public class SpiralStepSpawner : MonoBehaviour
     {
         switch (rotationPlane)
         {
-            case RotationPlane.XZ:
+            case SpiralStepSpawner.RotationPlane.XZ:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
                 rotation = Quaternion.Euler(0f, -angle + 90f + rotationOffset, 0f);
                 break;
-            case RotationPlane.XY:
+            case SpiralStepSpawner.RotationPlane.XY:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad), 0f);
                 rotation = Quaternion.Euler(0f, 0f, -angle + 90f + rotationOffset);
                 break;
-            case RotationPlane.YZ:
+            case SpiralStepSpawner.RotationPlane.YZ:
                 outwardLocal = new Vector3(0f, Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad));
                 rotation = Quaternion.Euler(-angle + 90f + rotationOffset, 0f, 0f);
                 break;
@@ -551,7 +553,7 @@ public class SpiralStepSpawnerEditor : Editor
         spawner.startAngle = EditorGUILayout.FloatField("Start Angle", spawner.startAngle);
         spawner.zeroAngleDirection = EditorGUILayout.Slider("Zero Angle Direction", spawner.zeroAngleDirection, 0f, 360f);
         spawner.autoFindColumn = EditorGUILayout.Toggle("Auto Find Column", spawner.autoFindColumn);
-        spawner.rotationPlane = (RotationPlane)EditorGUILayout.EnumPopup("Rotation Plane", spawner.rotationPlane);
+        spawner.rotationPlane = (SpiralStepSpawner.RotationPlane)EditorGUILayout.EnumPopup("Rotation Plane", spawner.rotationPlane);
         spawner.parentToColumn = EditorGUILayout.Toggle("Parent To Column", spawner.parentToColumn);
         spawner.defaultMaterial = (Material)EditorGUILayout.ObjectField("Default Material", spawner.defaultMaterial, typeof(Material), false);
         spawner.defaultColor = EditorGUILayout.ColorField("Default Color", spawner.defaultColor);
