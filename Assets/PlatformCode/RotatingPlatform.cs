@@ -8,10 +8,6 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
     public float angularSpeed = 30f;
     public bool clockwise = true;
 
-    [Header("Orientation")]
-    [Tooltip("Включено: платформа облетает центр, НЕ вращаясь вокруг своей оси (гондола). Выключено: платформа ещё и крутится сама (старое поведение).")]
-    public bool keepOrientation = true;
-
     private Rigidbody rb;
     private Vector3 initialLocalOffset;
     private Quaternion initialRotation;
@@ -47,14 +43,9 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
         float deltaAngle = angularSpeed * direction * Time.fixedDeltaTime;
         accumulatedAngle += deltaAngle;
 
-        Quaternion orbit = Quaternion.Euler(0f, accumulatedAngle, 0f);
-        Vector3 rotatedOffset = orbit * initialLocalOffset;
+        Vector3 rotatedOffset = Quaternion.Euler(0f, accumulatedAngle, 0f) * initialLocalOffset;
         rb.MovePosition(rotationCenter.position + rotatedOffset);
-
-        // Гондола: ориентация платформы не меняется, только позиция по орбите.
-        // Старое поведение (самовращение) — если keepOrientation выключен.
-        Quaternion targetRotation = keepOrientation ? initialRotation : orbit * initialRotation;
-        rb.MoveRotation(targetRotation);
+        rb.MoveRotation(Quaternion.Euler(0f, accumulatedAngle, 0f) * initialRotation);
     }
 
     public Vector3 GetVelocityAtPoint(Vector3 worldPoint)
@@ -67,7 +58,6 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
 
     public Vector3 GetAngularVelocity()
     {
-        if (keepOrientation) return Vector3.zero;
         float omega = AngularSpeedRad * (clockwise ? -1f : 1f);
         return new Vector3(0f, omega, 0f);
     }
