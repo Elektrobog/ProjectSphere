@@ -193,7 +193,7 @@ public class SpiralStepSpawner : MonoBehaviour
 
     private void GeneratePlatformsInternal(bool destroyImmediate)
     {
-        Debug.Log("=== [1] НАЧАЛО ГЕНЕРАЦИИ ===");
+        Debug.Log("=== [1] НАЧАЛО ГЕНЕРАЦИИ === (сборка спавнера: поворот XZ = 90° − угол + Rotation Offset, версия от 02.11.2026)");
 
         if (platformPrefab == null)
         {
