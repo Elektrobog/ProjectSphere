@@ -264,29 +264,75 @@ public class SpiralStepSpawner : MonoBehaviour
 
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
 
-            // Корректировка позиции по реальным границам меша (Bounds)
-            Bounds b = meshRenderer.bounds;
-            float minProjR = float.MaxValue;
-            float minProjY = float.MaxValue;
+            // ✅ ИСПРАВЛЕНО: Считываем реальные вершины меша, чтобы отступ был одинаковым на любом угле
+            Mesh platformMesh = null;
+            Transform platformMeshT = null;
 
-            for (int c = 0; c < 8; c++)
+            MeshFilter mf = platformObj.GetComponentInChildren<MeshFilter>();
+            if (mf != null && mf.sharedMesh != null)
             {
-                Vector3 corner = b.center + new Vector3(
-                    (c & 1) == 0 ? b.extents.x : -b.extents.x,
-                    (c & 2) == 0 ? b.extents.y : -b.extents.y,
-                    (c & 4) == 0 ? b.extents.z : -b.extents.z
-                );
-                Vector3 rel = corner - worldCenter;
-                float projR = Vector3.Dot(rel, outwardWorld);
-                if (projR < minProjR) minProjR = projR;
-                float projY = rel.y;
-                if (projY < minProjY) minProjY = projY;
+                platformMesh = mf.sharedMesh;
+                platformMeshT = mf.transform;
+            }
+            else
+            {
+                SkinnedMeshRenderer smr = platformObj.GetComponentInChildren<SkinnedMeshRenderer>();
+                if (smr != null && smr.sharedMesh != null)
+                {
+                    platformMesh = smr.sharedMesh;
+                    platformMeshT = smr.transform;
+                }
             }
 
-            float shiftR = effectiveRadius - minProjR;
-            float shiftY = settings.height - minProjY;
+            if (platformMesh != null && platformMeshT != null)
+            {
+                float minProjR = float.MaxValue;
+                float minProjY = float.MaxValue;
 
-            platformObj.transform.position = worldCenter + outwardWorld * shiftR + Vector3.up * shiftY;
+                Vector3[] verts = platformMesh.vertices;
+                for (int v = 0; v < verts.Length; v++)
+                {
+                    Vector3 wv = platformMeshT.TransformPoint(verts[v]);
+                    Vector3 rel = wv - worldCenter;
+
+                    float projR = Vector3.Dot(rel, outwardWorld);
+                    if (projR < minProjR) minProjR = projR;
+
+                    float projY = rel.y;
+                    if (projY < minProjY) minProjY = projY;
+                }
+
+                float shiftR = effectiveRadius - minProjR;
+                float shiftY = settings.height - minProjY;
+
+                platformObj.transform.position = worldCenter + outwardWorld * shiftR + Vector3.up * shiftY;
+            }
+            else
+            {
+                // Резервный вариант (если вдруг нет меша) — используем Bounds
+                Bounds b = meshRenderer.bounds;
+                float minProjR = float.MaxValue;
+                float minProjY = float.MaxValue;
+
+                for (int c = 0; c < 8; c++)
+                {
+                    Vector3 corner = b.center + new Vector3(
+                        (c & 1) == 0 ? b.extents.x : -b.extents.x,
+                        (c & 2) == 0 ? b.extents.y : -b.extents.y,
+                        (c & 4) == 0 ? b.extents.z : -b.extents.z
+                    );
+                    Vector3 rel = corner - worldCenter;
+                    float projR = Vector3.Dot(rel, outwardWorld);
+                    if (projR < minProjR) minProjR = projR;
+                    float projY = rel.y;
+                    if (projY < minProjY) minProjY = projY;
+                }
+
+                float shiftR = effectiveRadius - minProjR;
+                float shiftY = settings.height - minProjY;
+
+                platformObj.transform.position = worldCenter + outwardWorld * shiftR + Vector3.up * shiftY;
+            }
 
             // Установка материала
             if (settings.customMaterial != null) meshRenderer.sharedMaterial = settings.customMaterial;
@@ -319,10 +365,8 @@ public class SpiralStepSpawner : MonoBehaviour
                 MeshCollider mc = mf.gameObject.AddComponent<MeshCollider>();
                 mc.sharedMesh = mf.sharedMesh;
                 mc.convex = true;
-                Debug.Log($"[Спавнер] Платформе #{index} добавлен Convex MeshCollider (по форме меша).");
                 return;
             }
-            Debug.LogWarning($"[Спавнер] У платформы #{index} не найден MeshFilter — ставлю запасной BoxCollider.");
         }
 
         Renderer colRend = platformObj.GetComponentInChildren<Renderer>();
@@ -333,7 +377,6 @@ public class SpiralStepSpawner : MonoBehaviour
             Vector3 hi = platformObj.transform.InverseTransformPoint(colRend.bounds.max);
             box.center = (lo + hi) * 0.5f;
             box.size = hi - lo;
-            Debug.Log($"[Спавнер] Платформе #{index} добавлен BoxCollider по мешу.");
         }
     }
 
@@ -403,7 +446,6 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             platforms[i].spawnPosition = Mathf.Repeat(i * step, 360f);
         }
-        Debug.Log($"[Спавнер] Стартовые точки распределены равномерно: шаг {step}°.");
     }
 
     private void OnDrawGizmos()

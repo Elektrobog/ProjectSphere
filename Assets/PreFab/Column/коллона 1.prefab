@@ -106,7 +106,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d3c6369bda9c8674e834c7bb6f054592, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SpiralStepSpawner
-  platformPrefab: {fileID: 1711225138979225855, guid: 8430359bcb394ce409f0a29af892a23a, type: 3}
+  platformPrefab: {fileID: 8413421869050563849, guid: e3428f86e0f1b604eb971e98a5ae11f8, type: 3}
   rotationMode: 0
   autoColliderMode: 0
   columnCenter: {fileID: 8233656343908643061}
@@ -116,7 +116,7 @@ MonoBehaviour:
   - Column_Full
   - MainColumn
   defaultRadius: 3.7
-  rotationOffset: 90
+  rotationOffset: 0
   startAngle: 0
   generateOnStart: 1
   destroyPreviousOnGenerate: 1
@@ -126,6 +126,7 @@ MonoBehaviour:
   parentToColumn: 1
   showGizmos: 1
   gizmoColor: {r: 0, g: 1, b: 1, a: 1}
+  rotationPlane: 1
 --- !u!114 &8214494653746833463
 MonoBehaviour:
   m_ObjectHideFlags: 0
