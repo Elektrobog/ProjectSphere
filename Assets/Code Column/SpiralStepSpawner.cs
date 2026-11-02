@@ -169,8 +169,8 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             case SpiralStepSpawner.RotationPlane.XZ:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
-                // Ровно как в присланном варианте: Quaternion.Euler(0, угол, 0)
-                rotation = Quaternion.Euler(0f, angle + rotationOffset, 0f);
+                // Знак «-» при угле: нос платформы ВСЕГДА наружу от колонны (0°, 90°, 180°, 270°...)
+                rotation = Quaternion.Euler(0f, -angle + rotationOffset, 0f);
                 break;
             case SpiralStepSpawner.RotationPlane.XY:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad), 0f);
