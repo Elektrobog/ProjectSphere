@@ -59,7 +59,6 @@ public class SpiralStepSpawner : MonoBehaviour
 
         [Header("Визуал")]
         public Material customMaterial;
-        public Color platformColor = Color.white;
     }
 
     [Header("ОСНОВНЫЕ НАСТРОЙКИ")]
@@ -80,10 +79,11 @@ public class SpiralStepSpawner : MonoBehaviour
 
     [Header("НАСТРОЙКИ ГЕНЕРАЦИИ")]
     public float defaultRadius = 3.4f;
+
     [Tooltip("Доворот платформы вокруг вертикали (на позицию не влияет). В плоскости XZ: 0 = нос платформы строго наружу от колонны, 90 = боком, 180 = носом к колонне.")]
     public float rotationOffset = 0f;
 
-    [Tooltip("Стартовая точка на окружности (0-360°). Итоговый угол каждой платформы = Start Angle + её «Угол» из списка. Меняешь Start Angle — вся карусель платформ сдвигается вокруг колонны.")]
+    [Tooltip("Стартовая точка на окружности (0-360°). Итоговый угол каждой платформы = Start Angle + её «Угол» из списка.")]
     public float startAngle = 0f;
     public bool generateOnStart = true;
     public bool destroyPreviousOnGenerate = true;
@@ -130,7 +130,6 @@ public class SpiralStepSpawner : MonoBehaviour
             if (existing.Count > 0)
             {
                 spawnedPlatforms.AddRange(existing);
-                Debug.Log($"[Спавнер] На колонне уже есть {existing.Count} платформ — повторная генерация пропущена.");
             }
             else
             {
@@ -156,7 +155,6 @@ public class SpiralStepSpawner : MonoBehaviour
     }
 
     // ИТОГОВЫЙ УГОЛ ПЛАТФОРМЫ = Start Angle (стартовая точка) + «Угол» платформы.
-    // Механика из присланного варианта: angle = startAngle + angleOffset.
     private float GetAbsoluteSpawnAngle(PlatformSettings settings)
     {
         return Mathf.Repeat(startAngle + settings.spawnPosition, 360f);
@@ -169,64 +167,53 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             case SpiralStepSpawner.RotationPlane.XZ:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
-                // 90° − угол: нос платформы (ось Z+ префаба) строго наружу от колонны на ЛЮБОМ угле.
-                // Знак «-» синхронизирует направления обхода: позиция (Cos/Sin) идёт против часовой,
-                // а поворот вокруг Y в Unity — по часовой (без знака на 90° набегали лишние 180°).
-                // 90° — доводка от оси Z+ (нос меша) к радиусу (позиция считает угол от оси X).
-                // Rotation Offset — чистый доворот: 0 = нос строго наружу.
-                rotation = Quaternion.Euler(0f, 90f - angle + rotationOffset, 0f);
+                rotation = Quaternion.LookRotation(outwardLocal, Vector3.up) * Quaternion.Euler(0f, rotationOffset, 0f);
                 break;
             case SpiralStepSpawner.RotationPlane.XY:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad), 0f);
-                rotation = Quaternion.Euler(0f, 0f, -angle + 90f + rotationOffset);
+                rotation = Quaternion.LookRotation(outwardLocal, Vector3.forward) * Quaternion.Euler(0f, 0f, rotationOffset);
                 break;
             case SpiralStepSpawner.RotationPlane.YZ:
                 outwardLocal = new Vector3(0f, Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad));
-                rotation = Quaternion.Euler(-angle + 90f + rotationOffset, 0f, 0f);
+                rotation = Quaternion.LookRotation(outwardLocal, Vector3.right) * Quaternion.Euler(rotationOffset, 0f, 0f);
                 break;
             default:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
-                rotation = Quaternion.Euler(0f, -angle + 90f + rotationOffset, 0f);
+                rotation = Quaternion.LookRotation(outwardLocal, Vector3.up) * Quaternion.Euler(0f, rotationOffset, 0f);
                 break;
         }
     }
 
     private void GeneratePlatformsInternal(bool destroyImmediate)
     {
-        Debug.Log("=== [1] НАЧАЛО ГЕНЕРАЦИИ === (сборка спавнера: поворот XZ = 90° − угол + Rotation Offset, версия от 02.11.2026)");
-
         if (platformPrefab == null)
         {
-            Debug.LogError("[ОШИБКА] Префаб платформы (Platform Prefab) НЕ НАЗНАЧЕН в инспекторе!");
+            Debug.LogError("[Спавнер] Префаб платформы (Platform Prefab) НЕ НАЗНАЧЕН в инспекторе!");
             return;
         }
-        Debug.Log($"[2] Префаб назначен: {platformPrefab.name}");
 
         Transform center = FindColumnCenter();
         if (center == null)
         {
-            Debug.LogError("[ОШИБКА] Колонна (Column Center) не найдена!");
+            Debug.LogError("[Спавнер] Колонна (Column Center) не найдена!");
             return;
         }
-        Debug.Log($"[3] Колонна найдена: {center.name}");
 
 #if UNITY_EDITOR
         if (!Application.isPlaying && UnityEditor.PrefabUtility.IsPartOfPrefabAsset(center.gameObject))
         {
-            Debug.LogError("[ОШИБКА] Column Center указывает на префаб из папки Project! Перетащи в поле объект со сцены (Hierarchy).");
+            Debug.LogError("[Спавнер] Column Center указывает на префаб из папки Project! Перетащи в поле объект со сцены (Hierarchy).");
             return;
         }
 #endif
-        Debug.Log("[4] Проверка на префаб-ассет пройдена.");
 
         if (destroyPreviousOnGenerate) ClearPlatforms(destroyImmediate);
 
         if (platforms.Count == 0)
         {
-            Debug.LogWarning("[ПРЕДУПРЕЖДЕНИЕ] Список платформ ПУСТ! Нажми кнопку 'ДОБАВИТЬ ПЛАТФОРМУ' в инспекторе.");
+            Debug.LogWarning("[Спавнер] Список платформ ПУСТ! Нажми кнопку 'ДОБАВИТЬ ПЛАТФОРМУ' в инспекторе.");
             return;
         }
-        Debug.Log($"[5] Платформ в списке: {platforms.Count}");
 
         Vector3 worldCenter = center.position;
 
@@ -249,26 +236,19 @@ public class SpiralStepSpawner : MonoBehaviour
             if (!Application.isPlaying) Undo.RegisterCreatedObjectUndo(platformObj, "Generate Platform");
 #endif
 
-            // Метка спавнера — на КАЖДУЮ платформу, даже на стоячую:
-            // раньше стоячие платформы нельзя было найти (у них нет RotatingPlatform)
-            // и они дублировались при Play
+            // Метка спавнера — на КАЖДУЮ платформу, даже на стоячую
             if (platformObj.GetComponent<SpiralPlatformMarker>() == null)
             {
                 platformObj.AddComponent<SpiralPlatformMarker>();
             }
 
-            // ФИЗИКА/КОЛЛИЗИИ: у префаба есть Rigidbody, но кинематичным его делает
-            // только RotatingPlatform.Awake — то есть только вращающиеся платформы.
-            // Стоячая платформа с обычным Rigidbody падала под гравитацией,
-            // и её выталкивало коллайдером колонны (сбиты поворот, высота, позиция).
-            // Поэтому каждую созданную платформу делаем кинематиком без гравитации.
+            // ФИЗИКА: делаем платформу кинематиком, чтобы она не падала под гравитацией
             Rigidbody platformRb = platformObj.GetComponent<Rigidbody>();
             if (platformRb == null) platformRb = platformObj.AddComponent<Rigidbody>();
             platformRb.isKinematic = true;
             platformRb.useGravity = false;
 
-            // КОЛЛАЙДЕР: Rigidbody без коллайдера бесполезен — шар проваливался.
-            // Если у префаба нет ни одного коллайдера — ставим свой (см. AddAutoCollider)
+            // КОЛЛАЙДЕР: если у префаба нет коллайдера — добавляем автоматически
             Collider platformCol = platformObj.GetComponentInChildren<Collider>();
             if (platformCol == null)
             {
@@ -278,12 +258,13 @@ public class SpiralStepSpawner : MonoBehaviour
             Renderer meshRenderer = platformObj.GetComponentInChildren<Renderer>();
             if (meshRenderer == null)
             {
-                Debug.LogWarning($"[ПРЕДУПРЕЖДЕНИЕ] В префабе '{platformPrefab.name}' нет ни одного Renderer'а (Mesh Renderer). Платформа не будет видна!");
+                Debug.LogWarning($"[Спавнер] В префабе '{platformPrefab.name}' нет ни одного Renderer'а (Mesh Renderer). Платформа не будет видна!");
                 continue;
             }
 
             Vector3 outwardWorld = (center.rotation * outwardLocal).normalized;
 
+            // Корректировка позиции по реальным границам меша (Bounds)
             Bounds b = meshRenderer.bounds;
             float minProjR = float.MaxValue;
             float minProjY = float.MaxValue;
@@ -307,9 +288,11 @@ public class SpiralStepSpawner : MonoBehaviour
 
             platformObj.transform.position = worldCenter + outwardWorld * shiftR + Vector3.up * shiftY;
 
+            // Установка материала
             if (settings.customMaterial != null) meshRenderer.sharedMaterial = settings.customMaterial;
             else if (defaultMaterial != null) meshRenderer.sharedMaterial = defaultMaterial;
 
+            // Вращение
             if (ShouldRotate(settings))
             {
                 RotatingPlatform rotating = platformObj.GetComponent<RotatingPlatform>();
@@ -320,17 +303,12 @@ public class SpiralStepSpawner : MonoBehaviour
             }
 
             spawnedPlatforms.Add(platformObj);
-            Debug.Log($"[6] Платформа #{i + 1} успешно создана! Абсолютный угол: {positionAngle}°");
         }
 
-        Debug.Log($"=== [7] ГОТОВО. Сгенерировано {spawnedPlatforms.Count} платформ ===");
+        Debug.Log($"[Спавнер] Успешно сгенерировано {spawnedPlatforms.Count} платформ.");
     }
 
     // Автоколлайдер для платформы, у которой нет ни одного коллайдера.
-    // По умолчанию — выпуклый MeshCollider, он повторяет форму меша (скруглённые
-    // края платформы, в отличие от прямого BoxCollider).
-    // На кинематическом Rigidbody Unity разрешает только CONVEX MeshCollider,
-    // поэтому выпуклая оболочка — потолок точности, точнее только свой коллайдер в префабе.
     private void AddAutoCollider(GameObject platformObj, int index)
     {
         if (autoColliderMode == AutoColliderMode.ConvexMesh)
@@ -338,7 +316,6 @@ public class SpiralStepSpawner : MonoBehaviour
             MeshFilter mf = platformObj.GetComponentInChildren<MeshFilter>();
             if (mf != null && mf.sharedMesh != null)
             {
-                // Вешаем на тот же объект, где лежит меш, иначе коллайдер сместится
                 MeshCollider mc = mf.gameObject.AddComponent<MeshCollider>();
                 mc.sharedMesh = mf.sharedMesh;
                 mc.convex = true;
@@ -348,7 +325,6 @@ public class SpiralStepSpawner : MonoBehaviour
             Debug.LogWarning($"[Спавнер] У платформы #{index} не найден MeshFilter — ставлю запасной BoxCollider.");
         }
 
-        // Запасной вариант: BoxCollider по габаритам меша
         Renderer colRend = platformObj.GetComponentInChildren<Renderer>();
         if (colRend != null)
         {
@@ -366,8 +342,6 @@ public class SpiralStepSpawner : MonoBehaviour
 
     private void ClearPlatforms(bool destroyImmediate)
     {
-        // Уничтожаем ВСЕ платформы-дети колонны, а не только запомненные в списке:
-        // список не сериализуется, и после Play / переоткрытия сцены он пуст
         Transform center = FindColumnCenter();
         if (center != null)
         {
@@ -385,7 +359,6 @@ public class SpiralStepSpawner : MonoBehaviour
             }
         }
 
-        // Подстраховка: платформы из списка, потерявшие родителя
         foreach (var platform in spawnedPlatforms)
         {
             if (platform != null)
@@ -401,9 +374,6 @@ public class SpiralStepSpawner : MonoBehaviour
         spawnedPlatforms.Clear();
     }
 
-    // Все платформы-дети колонны (даже не попавшие в список — сгенерированные раньше).
-    // Ищем по метке спавнера ИЛИ по RotatingPlatform — покрываем и старые платформы,
-    // созданные до появления метки
     private void CollectPlatformObjects(Transform root, List<GameObject> list)
     {
         foreach (Transform child in root)
@@ -412,7 +382,7 @@ public class SpiralStepSpawner : MonoBehaviour
                 child.GetComponent<RotatingPlatform>() != null)
             {
                 list.Add(child.gameObject);
-                continue; // под платформу не заходим
+                continue;
             }
             CollectPlatformObjects(child, list);
         }
@@ -424,8 +394,6 @@ public class SpiralStepSpawner : MonoBehaviour
     [ContextMenu("Clear Platform List")]
     public void ClearPlatformList() => platforms.Clear();
 
-    // Быстрый способ расставить стартовые точки: равномерно по всей окружности.
-    // Первая платформа — 0°, дальше с шагом 360°/кол-во платформ.
     [ContextMenu("Distribute Evenly Around Column")]
     public void DistributeEvenly()
     {
@@ -547,12 +515,12 @@ public class SpiralStepSpawnerEditor : Editor
             p.height = EditorGUILayout.FloatField("Height", p.height);
             p.customRadius = EditorGUILayout.FloatField("Custom Radius", p.customRadius);
             p.spawnPosition = EditorGUILayout.Slider("Угол (° от стартовой точки)", p.spawnPosition, 0f, 360f);
-            // Галочка Enable Rotation показывается только в режиме Per Platform —
-            // в глобальных режимах её состояние игнорируется
+
             if (spawner.rotationMode == SpiralStepSpawner.RotationMode.PerPlatform)
             {
                 p.enableRotation = EditorGUILayout.Toggle("Enable Rotation", p.enableRotation);
             }
+
             p.rotationSpeed = EditorGUILayout.FloatField("Rotation Speed", p.rotationSpeed);
             p.clockwise = EditorGUILayout.Toggle("Clockwise", p.clockwise);
             p.customMaterial = (Material)EditorGUILayout.ObjectField("Custom Material", p.customMaterial, typeof(Material), false);
