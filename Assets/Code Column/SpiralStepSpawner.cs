@@ -80,7 +80,7 @@ public class SpiralStepSpawner : MonoBehaviour
 
     [Header("НАСТРОЙКИ ГЕНЕРАЦИИ")]
     public float defaultRadius = 3.4f;
-    [Tooltip("Поворот САМОЙ платформы вокруг своей оси (не влияет на позицию на окружности)")]
+    [Tooltip("Доворот платформы вокруг вертикали (на позицию не влияет). В плоскости XZ: 0 = нос платформы строго наружу от колонны, 90 = боком, 180 = носом к колонне.")]
     public float rotationOffset = 0f;
 
     [Tooltip("Стартовая точка на окружности (0-360°). Итоговый угол каждой платформы = Start Angle + её «Угол» из списка. Меняешь Start Angle — вся карусель платформ сдвигается вокруг колонны.")]
@@ -169,8 +169,12 @@ public class SpiralStepSpawner : MonoBehaviour
         {
             case SpiralStepSpawner.RotationPlane.XZ:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), 0f, Mathf.Sin(angle * Mathf.Deg2Rad));
-                // Знак «-» при угле: нос платформы ВСЕГДА наружу от колонны (0°, 90°, 180°, 270°...)
-                rotation = Quaternion.Euler(0f, -angle + rotationOffset, 0f);
+                // 90° − угол: нос платформы (ось Z+ префаба) строго наружу от колонны на ЛЮБОМ угле.
+                // Знак «-» синхронизирует направления обхода: позиция (Cos/Sin) идёт против часовой,
+                // а поворот вокруг Y в Unity — по часовой (без знака на 90° набегали лишние 180°).
+                // 90° — доводка от оси Z+ (нос меша) к радиусу (позиция считает угол от оси X).
+                // Rotation Offset — чистый доворот: 0 = нос строго наружу.
+                rotation = Quaternion.Euler(0f, 90f - angle + rotationOffset, 0f);
                 break;
             case SpiralStepSpawner.RotationPlane.XY:
                 outwardLocal = new Vector3(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad), 0f);
@@ -515,7 +519,7 @@ public class SpiralStepSpawnerEditor : Editor
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("СПИСОК ПЛАТФОРМ", EditorStyles.boldLabel);
 
-        EditorGUILayout.HelpBox("Итоговый угол каждой платформы = Start Angle (стартовая точка, в доп. настройках) + «Угол» платформы из списка. Пример: Start Angle = 0, угол платформы = 90 — платформа встанет на 90° от стартовой точки по окружности колонны (XZ: 0 = вправо X+, 90 = вперёд Z+). Поворот платформы = по углу + Rotation Offset.", MessageType.Info);
+        EditorGUILayout.HelpBox("Итоговый угол каждой платформы = Start Angle (стартовая точка, в доп. настройках) + «Угол» платформы из списка. Пример: Start Angle = 0, угол платформы = 90 — платформа встанет на 90° от стартовой точки по окружности колонны (XZ: 0 = вправо X+, 90 = вперёд Z+). Поворот платформы (XZ): нос всегда наружу от колонны + Rotation Offset (0 = строго наружу).", MessageType.Info);
 
         EditorGUILayout.BeginHorizontal();
         if (GUILayout.Button("ДОБАВИТЬ ПЛАТФОРМУ"))
@@ -568,7 +572,7 @@ public class SpiralStepSpawnerEditor : Editor
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("ДОПОЛНИТЕЛЬНЫЕ НАСТРОЙКИ", EditorStyles.boldLabel);
         spawner.defaultRadius = EditorGUILayout.FloatField("Default Radius", spawner.defaultRadius);
-        spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset", spawner.rotationOffset);
+        spawner.rotationOffset = EditorGUILayout.FloatField("Rotation Offset (0 = нос наружу)", spawner.rotationOffset);
         spawner.startAngle = EditorGUILayout.Slider("Start Angle (стартовая точка)", spawner.startAngle, 0f, 360f);
         spawner.autoFindColumn = EditorGUILayout.Toggle("Auto Find Column", spawner.autoFindColumn);
         spawner.rotationPlane = (SpiralStepSpawner.RotationPlane)EditorGUILayout.EnumPopup("Rotation Plane", spawner.rotationPlane);
