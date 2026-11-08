@@ -11,7 +11,8 @@ Material:
   m_Shader: {fileID: 4800000, guid: 3cf91f9f603463f47b60a2c4a39b5805, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
+  m_ValidKeywords:
+  - _MODE_VERTICAL
   m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
@@ -85,60 +86,65 @@ Material:
     - _AddPrecomputedVelocity: 0
     - _AlphaClip: 0
     - _AlphaToMask: 0
+    - _BaseGlow: 0.5
     - _Blend: 0
     - _BlendModePreserveSpecular: 1
-    - _Brightness: 3
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
-    - _Contrast: 1.7
-    - _CoreRadius: 0.018
     - _Cull: 2
     - _Cutoff: 0.5
+    - _Density: 1
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
     - _DstBlendAlpha: 0
+    - _EndFade: 1.5
     - _EnvironmentReflections: 1
-    - _Filaments: 3
-    - _FlowMode: 1
+    - _Filament: 0.8
+    - _Flicker: 0.4
     - _GlossMapScale: 1
     - _Glossiness: 0.59999996
     - _GlossyReflections: 1
+    - _HalfLength: 25
+    - _Intensity: 3
     - _Metallic: 0
     - _Mode: 0
     - _OcclusionStrength: 1
+    - _PacketLen: 1
     - _Parallax: 0.02
     - _QueueOffset: 0
     - _ReceiveShadows: 1
-    - _RingPulses: 6
-    - _RingRadius: 1.46
+    - _RingRadius: 4.87
     - _Smoothness: 0.59999996
     - _SmoothnessTextureChannel: 0
-    - _SparkPeriod: 1.5
-    - _Sparks: 1.5
+    - _Spacing: 100
     - _SpecularHighlights: 1
-    - _Speed: 4
+    - _Speed: 1
+    - _Spin: 2
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
-    - _StreakSize: 0.35
     - _Surface: 0
-    - _Trail: 0
+    - _TailPow: 6
+    - _ThreadWidth: 1
     - _UVSec: 0
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
     m_Colors:
-    - _BaseColor: {r: 0, g: 1, b: 0.34919015, a: 1}
-    - _Color: {r: 0, g: 1, b: 0.34919012, a: 1}
-    - _ColorDeep: {r: 0, g: 0, b: 0, a: 0}
-    - _ColorHot: {r: 0.65, g: 1, b: 0.75, a: 1}
-    - _ColorMid: {r: 0, g: 1, b: 0.09999997, a: 1}
+    - _AxisDir: {r: 0, g: 1, b: 0, a: 0}
+    - _BaseColor: {r: 0.24780047, g: 0.6499564, b: 1, a: 1}
+    - _Color: {r: 0.24780044, g: 0.64995635, b: 1, a: 1}
+    - _CoreColor: {r: 0.54999995, g: 0.85, b: 1, a: 1}
+    - _EdgeColor: {r: 0, g: 0.079999976, b: 0.45, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
+    - _MidColor: {r: 0.049999982, g: 0.37999994, b: 1, a: 1}
+    - _PlaneU: {r: 1, g: 0, b: 0, a: 0}
+    - _PlaneV: {r: 0, g: 0, b: 1, a: 0}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
---- !u!114 &4126774117400707129
+--- !u!114 &877423657558479025
 MonoBehaviour:
   m_ObjectHideFlags: 11
   m_CorrespondingSourceObject: {fileID: 0}

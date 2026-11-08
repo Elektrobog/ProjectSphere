@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 5e7547c8736d5664c8802df19fd702c6
+guid: 820b77b5116788549b6643a20205a0df
 ModelImporter:
   serializedVersion: 24501
   internalIDToNameTable: []
@@ -8,27 +8,17 @@ ModelImporter:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: Energy - Flow Ring
-    second: {fileID: 2100000, guid: 895ce5c4a3e642e408e3ee6f968900e1, type: 2}
-  - first:
-      type: UnityEngine:Material
-      assembly: UnityEngine.CoreModule
-      name: Energy - Flow Vertical
-    second: {fileID: 2100000, guid: 3828aead535aaf442a3c53e05e769352, type: 2}
+    second: {fileID: 2100000, guid: 282c91822ab4fd543827dd8b8bb1eeb8, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
       name: Graphite Blue - Armor
-    second: {fileID: 2100000, guid: 4b20dd72609c7874487668c6ea9d361f, type: 2}
+    second: {fileID: 2100000, guid: 355138e6e0baa14499ee3f5b2790df8e, type: 2}
   - first:
       type: UnityEngine:Material
       assembly: UnityEngine.CoreModule
-      name: Inner Body - Dark Blue
-    second: {fileID: 2100000, guid: f297d6bf671d0a94c93cb40cb98127a2, type: 2}
-  - first:
-      type: UnityEngine:Material
-      assembly: UnityEngine.CoreModule
-      name: Transparent Glass - Tubes
-    second: {fileID: 2100000, guid: 4d1bc70369b003047862cddd7daa5554, type: 2}
+      name: Magnetic Field
+    second: {fileID: 2100000, guid: f10a2b491c7b9424ba7c45a0b8c1df86, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0
