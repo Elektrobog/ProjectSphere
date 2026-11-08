@@ -1,5 +1,7 @@
 """
 Sci-Fi Energy Column — версия с эффектом «текущей» энергии
+Габарит по умолчанию: ВЫСОТА 50 м, ДИАМЕТР 10 м (все размеры в блоке
+ПАРАМЕТРЫ пропорционально согласованы под эту башню).
 Совместим с Blender 3.x / 4.x / 5.x
 Запуск: Scripting -> Open -> Run Script
 
@@ -7,8 +9,8 @@ Sci-Fi Energy Column — версия с эффектом «текущей» э�
 - Энергия теперь НЕ сплошной светящийся стержень, а поток отдельных
   импульсов-«капель», бегущих по трубке с тёмными паузами между ними.
   За это отвечают: ENERGY_TRAIL = 0 (тёмные паузы), крупный
-  ENERGY_STREAK_SIZE = 0.35 (капли видны глазу), ENERGY_BLOB_CONTRAST
-  (резкие края капель) и более толстый стержень ENERGY_RADIUS = 0.018.
+  ENERGY_STREAK_SIZE (капли видны глазу), ENERGY_BLOB_CONTRAST
+  (резкие края капель) и толстый стержень ENERGY_RADIUS.
 - Анимация времени переведена с драйвера на узел Scene Time — он
   анимируется по кадру всегда, без авто-запуска Python (драйвер оставлен
   как запасной вариант для очень старых сборок).
@@ -33,51 +35,55 @@ import random
 # 1. ПАРАМЕТРЫ
 # ============================================================
 
-HEIGHT = 10.0
-DIAMETER = 3.0
+HEIGHT = 50.0
+DIAMETER = 10.0
 
-VERTICAL_LINES = 16          # плит по окружности
-HORIZONTAL_ROWS = 14         # рядов плит по высоте
+VERTICAL_LINES = 32          # плит по окружности = и вертикальных трубок;
+                              # 32 -> плита ~0.8 м шириной, трубка примерно раз в метр
+HORIZONTAL_ROWS = 40         # рядов плит по высоте (кольца — по границам рядов);
+                              # 40 -> плита ~1.0 м высотой, кольцо каждые 1.25 м
 
-GROOVE_WIDTH = 0.09          # ширина углублений
-PLATE_DEPTH = 0.16           # толщина плит
+GROOVE_WIDTH = 0.22          # ширина углублений (в них лежат трубки)
+PLATE_DEPTH = 0.5            # толщина плит
 PLATE_ARC_SEGMENTS = 6       # сглаженность дуги плиты
 
-BEVEL_WIDTH = 0.035
+BEVEL_WIDTH = 0.10
 BEVEL_SEGMENTS = 3
 
 SEPARATE_PLATES = False      # True = каждая плита отдельным объектом (медленнее,
                              # но можно анимировать плиты по одной)
 
 # Стеклянные трубки
-GLASS_RADIUS = 0.030
+GLASS_RADIUS = 0.09           # радиус трубки 9 см: видна издалека, но не занимает всё
 GLASS_ROUGHNESS = 0.05
-CIRCLE_SEGMENTS = 192
-TUBE_SINK = 0.012            # насколько трубка утоплена относительно поверхности плит
+CIRCLE_SEGMENTS = 128        # сегментов кольца (31 м окружности — 128 достаточно)
+TUBE_SINK = 0.04             # насколько трубка утоплена относительно поверхности плит
 GLASS_REFLECT = 0.10         # базовая отражающая способность стекла
 GLASS_EDGE = 3.0              # яркость бликов по краям трубки
 
 # Энергия: зелёные импульсы-«капли», бегущие внутри прозрачных трубок
-ENERGY_RADIUS = 0.018         # радиус стержня энергии (0.013 -> 0.018: капли заметнее)
+ENERGY_RADIUS = 0.06          # радиус стержня энергии (6 см внутри 9 см стекла)
 ENERGY_COLOR = (0.0, 1.0, 0.1, 1.0)
 ENERGY_POWER = 1.0            # общая яркость энергии
 ENERGY_BRIGHTNESS = 3.0       # усиление свечения: капли пробивают порог Bloom,
                               # паузы между ними — нет
 ENERGY_ANIMATED = True        # течение энергии (узел Scene Time, надёжнее драйвера)
-ENERGY_PULSE_PERIOD = 1.5     # период быстрых искр на вертикальных трубках (м)
+ENERGY_PULSE_PERIOD = 5.0     # период быстрых искр на вертикальных трубках (м)
 ENERGY_RING_PULSES = 6        # волн искр на каждом горизонтальном кольце
-ENERGY_PULSE_SPEED = 0.2      # скорость течения капель (безразмерных единиц/кадр)
-                              # 0.2 при STREAK 0.35 ~= 1.7 м/с при 24 fps
+ENERGY_PULSE_SPEED = 0.1      # скорость течения капель (безразмерных единиц/кадр)
+                              # 0.1 при STREAK 2.0 ~= 5 м/с при 24 fps —
+                              # капля проходит 50-метровую башню за ~10 секунд
 ENERGY_TRAIL = 0.0            # яркость ПАУЗ между импульсами (0 = тёмные промежутки;
                               # именно старое значение 0.4 делало из энергии «палку»)
-ENERGY_STREAK_SIZE = 0.35     # длина капли вдоль трубки (м); было 0.10 — слишком мелко
+ENERGY_STREAK_SIZE = 2.0      # длина капли вдоль трубки (м): 2 м на 50-метровой башне
+                              # (в Unity: ④ Длина капли = 2.0 в материале вертикалей)
 ENERGY_FILAMENTS = 3          # сколько прожилок вокруг стержня энергии (2-4)
 ENERGY_BLOB_CONTRAST = 1.7    # контраст капель: >1 = резче капли и темнее фон
 ENERGY_SPARKS = 1.5           # тонкие быстрые искры-«бусины» поверх капель (0 = выкл)
 
 # Свечение вокруг импульсов
 ENERGY_HALO = False          # ореол-геометрия (по умолчанию выключена, свечение даёт Glare)
-ENERGY_HALO_RADIUS = 0.045
+ENERGY_HALO_RADIUS = 0.15
 ENERGY_HALO_OPACITY = 0.25
 ENERGY_HALO_STRENGTH = 1.0
 ENERGY_GLOW_POST = True      # Bloom/Glare в постобработке
@@ -665,7 +671,7 @@ def create_tubes(glass_mat, glass_col, energy_col):
 def create_core(material, collection):
     bpy.ops.mesh.primitive_cylinder_add(
         vertices=96,
-        radius=INNER_R - 0.015,
+        radius=INNER_R - 0.05,
         depth=HEIGHT,
         location=(0, 0, 0),
     )
@@ -697,9 +703,9 @@ def setup_scene():
     scene.collection.objects.link(target)
 
     cam_data = bpy.data.cameras.new("Column Camera")
-    cam_data.lens = 40
+    cam_data.lens = 35
     cam = bpy.data.objects.new("Column Camera", cam_data)
-    cam.location = (12, -12, 3)
+    cam.location = (55, -55, 15)
     scene.collection.objects.link(cam)
 
     track = cam.constraints.new("TRACK_TO")
@@ -709,11 +715,11 @@ def setup_scene():
     scene.camera = cam
 
     light_data = bpy.data.lights.new("Key Light", "AREA")
-    light_data.energy = 600
-    light_data.size = 5
+    light_data.energy = 3000
+    light_data.size = 15
     light_data.color = (0.6, 0.8, 1.0)
     light = bpy.data.objects.new("Key Light", light_data)
-    light.location = (7, -5, 6)
+    light.location = (20, -14, 18)
     scene.collection.objects.link(light)
     track_l = light.constraints.new("TRACK_TO")
     track_l.target = target
