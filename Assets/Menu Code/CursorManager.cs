@@ -1,44 +1,47 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
+/// Управление курсором: в меню обычный курсор, в уровне скрытый и захваченный.
 public class CursorManager : MonoBehaviour
 {
-    public static CursorManager Instance;
+    [Header("Настройки")]
+    [Tooltip("Захватить курсор при старте (включай для уровня, в меню курсор должен быть свободным)")]
+    public bool lockCursorOnStart = false;
+    [Tooltip("Режим захвата курсора")]
+    public CursorLockMode lockMode = CursorLockMode.Locked;
+    [Tooltip("Показывать курсор, когда он освобождён")]
+    public bool visibleWhenUnlocked = true;
+
+    public static CursorManager Instance { get; private set; }
 
     private void Awake()
     {
-        if (Instance == null)
-        {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-
-            // ������������� �� ������� �������� �����
-            SceneManager.sceneLoaded += OnSceneLoaded;
-        }
-        else
+        if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
+            return;
         }
+        Instance = this;
     }
 
-    private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    private void Start()
     {
-        // � ���� ���������� ������
-        if (scene.name == "MainMenu")
-            ShowCursor();
+        if (lockCursorOnStart)
+            LockCursor();
         else
-            HideCursor(); // � LoadingScene � Level 1 ������ �����
+            UnlockCursor();
     }
 
-    public void HideCursor()
+    /// Захватить и спрятать курсор (для геймплея).
+    public void LockCursor()
     {
+        Cursor.lockState = lockMode;
         Cursor.visible = false;
-        Cursor.lockState = CursorLockMode.Locked;
     }
 
-    public void ShowCursor()
+    /// Освободить и показать курсор (для меню и паузы).
+    public void UnlockCursor()
     {
-        Cursor.visible = true;
         Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = visibleWhenUnlocked;
     }
 }

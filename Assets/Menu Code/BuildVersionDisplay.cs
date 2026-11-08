@@ -1,12 +1,21 @@
+using TMPro;
 using UnityEngine;
-using TMPro; // ���� ����������� TextMeshPro
 
+/// Показывает версию сборки на тексте меню.
 public class BuildVersionDisplay : MonoBehaviour
 {
-    [SerializeField] private TextMeshProUGUI versionText;
+    [Tooltip("Текст, на который выводится версия (пусто — TMP_Text на этом объекте)")]
+    public TMP_Text versionText;
+    [Tooltip("Префикс перед номером версии")]
+    public string prefix = "v";
 
-    void Start()
+    private void Awake()
     {
-        versionText.text = "v" + Application.version;
+        if (versionText == null)
+            versionText = GetComponent<TMP_Text>();
+        if (versionText != null)
+            versionText.text = prefix + Application.version;
+        else
+            Debug.LogWarning("[BuildVersionDisplay] Не найден TMP_Text для вывода версии.");
     }
 }

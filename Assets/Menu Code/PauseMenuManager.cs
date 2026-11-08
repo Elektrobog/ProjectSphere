@@ -1,87 +1,76 @@
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.InputSystem;
+using UnityEngine.SceneManagement;
 
-public class PauseMenuController : MonoBehaviour
+/// Меню паузы: Esc ставит игру на паузу и показывает панель.
+public class PauseMenuManager : MonoBehaviour
 {
-    [Header("UI Elements")]
-    [SerializeField] private GameObject pauseMenuPanel;
-    [SerializeField] private Button resumeButton;
-    [SerializeField] private Button quitButton;
+    [Header("UI")]
+    [Tooltip("Панель меню паузы")]
+    public GameObject pausePanel;
 
-    [Header("Input Settings")]
-    [SerializeField] private InputActionAsset inputActions;
-    private InputAction pauseAction;
+    [Header("Сцены")]
+    public string mainMenuSceneName = "MainMenu";
+    public string levelSceneName = "Level 1";
 
-    private bool isPaused = false;
-    private bool canTogglePause = true;
+    private bool _paused;
 
-    void Start()
+    private void Update()
     {
-        resumeButton.onClick.AddListener(ResumeGame);
-        quitButton.onClick.AddListener(QuitGame);
-        pauseMenuPanel.SetActive(false);
-        SetupInputAction();
-        SetGameState(true);
-    }
-
-    void SetupInputAction()
-    {
-        if (inputActions != null)
+        if (Keyboard.current == null)
+            return;
+        if (Keyboard.current.escapeKey.wasPressedThisFrame)
         {
-            pauseAction = inputActions.FindAction("Pause");
-            if (pauseAction != null)
-            {
-                pauseAction.performed += OnPausePressed;
-                pauseAction.Enable();
-            }
+            if (_paused)
+                Resume();
+            else
+                Pause();
         }
     }
 
-    private void OnPausePressed(InputAction.CallbackContext context)
+    /// Поставить игру на паузу.
+    public void Pause()
     {
-        // ���� ������� ������� � ���������� �������
-        if (FallZone2.IsGameCompleted) return;
-        if (!canTogglePause) return;
-        StartCoroutine(TogglePauseWithDelay());
-    }
-
-    private System.Collections.IEnumerator TogglePauseWithDelay()
-    {
-        TogglePause();
-        canTogglePause = false;
-        yield return new WaitForSecondsRealtime(0.1f);
-        canTogglePause = true;
-    }
-
-    private void TogglePause()
-    {
-        if (isPaused) ResumeGame();
-        else PauseGame();
-    }
-
-    private void PauseGame()
-    {
-        if (isPaused) return;
-        isPaused = true;
+        if (_paused)
+            return;
+        _paused = true;
         Time.timeScale = 0f;
-        pauseMenuPanel.SetActive(true);
+        if (pausePanel != null)
+            pausePanel.SetActive(true);
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
-        resumeButton.Select();
     }
 
-    public void ResumeGame()
+    /// Продолжить игру.
+    public void Resume()
     {
-        if (!isPaused) return;
-        isPaused = false;
+        if (!_paused)
+            return;
+        _paused = false;
         Time.timeScale = 1f;
-        pauseMenuPanel.SetActive(false);
+        if (pausePanel != null)
+            pausePanel.SetActive(false);
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
 
-    private void QuitGame()
+    /// Перезапустить уровень.
+    public void RestartLevel()
+    {
+        Time.timeScale = 1f;
+        string scene = string.IsNullOrEmpty(levelSceneName) ? SceneManager.GetActiveScene().name : levelSceneName;
+        SceneManager.LoadScene(scene);
+    }
+
+    /// Вернуться в главное меню.
+    public void LoadMainMenu()
+    {
+        Time.timeScale = 1f;
+        SceneManager.LoadScene(mainMenuSceneName);
+    }
+
+    /// Выйти из игры.
+    public void QuitGame()
     {
         Time.timeScale = 1f;
 #if UNITY_EDITOR
@@ -89,27 +78,5 @@ public class PauseMenuController : MonoBehaviour
 #else
         Application.Quit();
 #endif
-    }
-
-    void SetGameState(bool playing)
-    {
-        if (playing)
-        {
-            Time.timeScale = 1f;
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-        }
-        else
-        {
-            Time.timeScale = 0f;
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-        }
-    }
-
-    void OnDestroy()
-    {
-        if (pauseAction != null)
-            pauseAction.performed -= OnPausePressed;
     }
 }

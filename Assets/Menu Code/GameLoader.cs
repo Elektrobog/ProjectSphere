@@ -1,339 +1,349 @@
-﻿using System.Collections;
-using UnityEngine;
-using UnityEngine.SceneManagement;
-using UnityEngine.Rendering;
-using UnityEngine.UI;
+using System;
+using System.Collections;
 using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
+/// <summary>
+/// Загрузчик уровня в стиле хороших игр: меню плавно растворяется,
+/// появляется экран загрузки, уровень грузится аддитивно, шейдеры прогреваются
+/// ДО активации, сцена активируется под экраном загрузки с замороженным временем,
+/// и только когда всё прогрето, игрок плавно попадает в уровень без фризов.
+/// </summary>
 public class GameLoader : MonoBehaviour
 {
-    [Header("=== Панели ===")]
-    [SerializeField] private GameObject mainMenuPanel;
-    [SerializeField] private GameObject loadingPanel;
+    [Header("Ссылки на меню")]
+    public GameObject mainMenuPanel;
+    public GameObject loadingPanel;
+    public Image progressFill;
+    public RectTransform progressFillRect;
+    public TMP_Text percentageText;
+    public TMP_Text statusText;
+    public Button startButton;
 
-    [Header("=== UI прогресса ===")]
-    [SerializeField] private Image progressFill;          // для метода Fill
-    [SerializeField] private RectTransform progressFillRect; // для метода ширины
-    [SerializeField] private TextMeshProUGUI percentageText;
-    [SerializeField] private TextMeshProUGUI statusText;
+    [Header("Сцена и время")]
+    [Tooltip("Имя сцены, которая будет загружена")]
+    public string targetScene = "Level 1";
+    [Tooltip("Минимальное время показа экрана загрузки")]
+    public float minLoadTime = 2f;
+    [Tooltip("Пауза после активации уровня: физика, GC, первые кадры")]
+    public float postActivationWarmupTime = 0.6f;
+    [Tooltip("Максимальная скорость полосы прогресса (0..1 в секунду)")]
+    public float maxProgressFillSpeed = 0.7f;
 
-    [Header("=== Кнопки ===")]
-    [SerializeField] private Button startButton;
+    [Header("Прогрев шейдеров")]
+    [Tooltip("Коллекция вариантов шейдеров для прогрева")]
+    public ShaderVariantCollection shaderWarmupCollection;
+    [Tooltip("Если коллекция не задана, прогреть все шейдеры (медленнее, но надёжнее)")]
+    public bool fallbackShaderWarmup = true;
+    [Tooltip("Заморозить игровое время, пока уровень не прогрет")]
+    public bool freezeGameTimeDuringWarmup = true;
+    [Tooltip("Выгрузить неиспользуемые ассеты до старта уровня")]
+    public bool unloadUnusedAssetsDuringLoad = true;
 
-    [Header("=== Сцена ===")]
-    [SerializeField] private string targetScene = "Level1";
+    [Header("Плавные переходы")]
+    [Tooltip("Плавно растворять экран загрузки в начале уровня")]
+    public bool loadingScreenFadeOut = true;
+    [Tooltip("Длительность растворения меню, сек")]
+    public float menuFadeOutDuration = 0.25f;
+    [Tooltip("Длительность появления экрана загрузки, сек")]
+    public float loadingFadeInDuration = 0.25f;
 
-    [Tooltip("Минимальное время, которое загрузочный экран будет виден, до активации сцены")]
-    [SerializeField] private float minLoadTime = 2.0f;
+    [Header("Полоса прогресса")]
+    public Color startColor = Color.red;
+    public Color middleColor = Color.yellow;
+    public Color endColor = Color.green;
+    [Tooltip("Советы, показываемые во время загрузки")]
+    public string[] loadingTips;
+    public TMP_Text tipText;
+    [Tooltip("Растягивать полосу по ширине, а не по fillAmount")]
+    public bool useWidthMethod = true;
+    public float maxProgressBarWidth = 250f;
 
-    [Tooltip("СКОЛЬКО секунд держать загрузочный экран ПОСЛЕ активации сцены. " +
-             "Это время нужно движку, чтобы отработать Awake/Start новых объектов, " +
-             "физику, NavMesh и первые тяжёлые кадры рендера — без этого запаса " +
-             "фриз просто переносится с загрузочного экрана на геймплей.")]
-    [SerializeField] private float postActivationWarmupTime = 0.6f;
+    private const float LoadingFadeOutDuration = 0.35f;
+    private const float TipInterval = 2.5f;
 
-    [Tooltip("Максимальная скорость роста бара (доля прогресса в секунду). " +
-             "Не даёт бару 'долетать' до 100% рывком, даже если реальная загрузка резко ускорилась.")]
-    [SerializeField] private float maxProgressFillSpeed = 0.7f;
+    private AsyncOperation _loadOp;
+    private bool _isLoading;
+    private float _displayProgress;
+    private float _tipTimer;
+    private int _tipIndex;
+    private CanvasGroup _menuGroup;
+    private CanvasGroup _loadingGroup;
 
-    [Header("=== Прогрев шейдеров (сильно снижает фриз при первом повороте камеры) ===")]
-    [Tooltip("Опционально: ShaderVariantCollection со всеми материалами/шейдерами уровня. " +
-             "Прогревается ЗАРАНЕЕ, пока пользователь видит загрузочный экран, а не когда камера " +
-             "впервые смотрит на объект в игре. Как создать — см. пояснение в чате.")]
-    [SerializeField] private ShaderVariantCollection shaderWarmupCollection;
-
-    [Header("=== Цвета ===")]
-    [SerializeField] private Color startColor = new Color(1f, 0.3f, 0.3f, 1f);
-    [SerializeField] private Color middleColor = new Color(1f, 1f, 0.3f, 1f);
-    [SerializeField] private Color endColor = new Color(0.3f, 1f, 0.3f, 1f);
-
-    [Header("=== Советы ===")]
-    [SerializeField] private string[] loadingTips;
-    [SerializeField] private TextMeshProUGUI tipText;
-
-    [Header("=== Метод бара ===")]
-    [SerializeField] private bool useWidthMethod = true;
-    [SerializeField] private float maxProgressBarWidth = 600f;
-
-    private bool isLoading = false;
-    private float currentProgress = 0f;
-    private float targetProgress = 0f;
-
-    // GameLoader и Canvas — РАЗНЫЕ root-объекты в иерархии сцены (см. скриншот).
-    // DontDestroyOnLoad работает только на корневые объекты, поэтому оба нужно
-    // персистить отдельно, иначе Canvas с прогресс-баром уничтожится при
-    // выгрузке сцены меню, а ссылки в этом скрипте станут Missing.
-    private GameObject canvasRoot;
-
-    void Start()
+    private void Start()
     {
-        InitializeUI();
-
-        if (startButton != null)
-        {
-            startButton.onClick.RemoveAllListeners();
-            startButton.onClick.AddListener(StartGameLoading);
-        }
-
-        InitializeTips();
-    }
-
-    void InitializeUI()
-    {
-        if (mainMenuPanel != null)
-            mainMenuPanel.SetActive(true);
-
         if (loadingPanel != null)
             loadingPanel.SetActive(false);
-
-        if (progressFillRect == null && progressFill != null)
-            progressFillRect = progressFill.GetComponent<RectTransform>();
-
-        if (useWidthMethod && progressFillRect != null)
-            progressFillRect.sizeDelta = new Vector2(0, progressFillRect.sizeDelta.y);
+        if (startButton != null)
+            startButton.onClick.AddListener(StartGameLoading);
     }
 
-    void InitializeTips()
-    {
-        if (loadingTips == null || loadingTips.Length == 0)
-        {
-            loadingTips = new string[]
-            {
-                "Исследуйте локации внимательнее — не всё видно с первого взгляда",
-                "Сохраняйтесь чаще, чтобы не терять прогресс",
-                "Изучите управление в настройках перед стартом",
-                "Обращайте внимание на подсказки на экране",
-                "Не спешите — уровень вознаграждает внимательность"
-            };
-        }
-    }
-
-    void Update()
-    {
-        if (!isLoading) return;
-
-        if (Mathf.Abs(currentProgress - targetProgress) > 0.0005f)
-        {
-            // MoveTowards вместо Lerp — рост ограничен фиксированной СКОРОСТЬЮ,
-            // а не долей расстояния, поэтому бар не может "долететь" скачком
-            currentProgress = Mathf.MoveTowards(
-                currentProgress,
-                targetProgress,
-                maxProgressFillSpeed * Time.unscaledDeltaTime
-            );
-            UpdateProgressUI(currentProgress);
-        }
-    }
-
+    /// Запуск загрузки (можно повесить на кнопку Start).
     public void StartGameLoading()
     {
-        if (isLoading) return;
-
-        if (!SceneExists(targetScene))
-        {
-            Debug.LogError($"Сцена '{targetScene}' не найдена в Build Settings!");
+        if (_isLoading)
             return;
-        }
-
-        // ВАЖНО: без этого объекты (и корутина) будут уничтожены Unity'ей
-        // в момент выгрузки текущей сцены, прямо посреди загрузки/warmup-фазы —
-        // отсюда эффект "бар замер на 90% и тут же сцена сменилась".
-        // Персистим отдельно GameLoader (где живёт корутина) и Canvas (где живёт UI),
-        // так как в вашей иерархии это два разных root-объекта.
-        DontDestroyOnLoad(transform.root.gameObject);
-
-        if (loadingPanel != null)
-        {
-            canvasRoot = loadingPanel.transform.root.gameObject;
-            if (canvasRoot != transform.root.gameObject)
-                DontDestroyOnLoad(canvasRoot);
-        }
-
-        SwitchToLoadingScreen();
-        StartCoroutine(LoadGameSceneCoroutine());
+        StartCoroutine(LoadLevelFlow());
     }
 
-    void SwitchToLoadingScreen()
+    private IEnumerator LoadLevelFlow()
     {
-        if (mainMenuPanel != null)
-            mainMenuPanel.SetActive(false);
+        _isLoading = true;
 
+        // --- Фаза 0: плавный переход меню -> экран загрузки ---
         if (loadingPanel != null)
             loadingPanel.SetActive(true);
 
-        currentProgress = 0f;
-        targetProgress = 0f;
-        UpdateProgressUI(0f);
+        _menuGroup = GetOrAddCanvasGroup(mainMenuPanel);
+        _loadingGroup = GetOrAddCanvasGroup(loadingPanel);
 
-        ShowRandomTip();
-
-        if (startButton != null)
-            startButton.interactable = false;
-
-        isLoading = true;
-    }
-
-    IEnumerator LoadGameSceneCoroutine()
-    {
-        float startTime = Time.unscaledTime;
-
-        AsyncOperation op = SceneManager.LoadSceneAsync(targetScene);
-        op.allowSceneActivation = false;
-
-        // ===== ФАЗА 1: реальная загрузка ассетов сцены (Unity: 0 → 0.9) =====
-        while (op.progress < 0.9f)
+        float t = 0f;
+        while (t < menuFadeOutDuration && _menuGroup != null)
         {
-            float realProgress = Mathf.Clamp01(op.progress / 0.9f);
-            float elapsed = Time.unscaledTime - startTime;
-            float timeProgress = Mathf.Clamp01(elapsed / minLoadTime);
-
-            // цель = максимум из реального прогресса и "по времени", но не больше 0.9,
-            // и без искусственного "форсажа" вперёд реальных данных
-            targetProgress = Mathf.Min(0.9f, Mathf.Max(realProgress, timeProgress) * 0.9f);
-
-            UpdateStatusText(realProgress);
+            t += Time.unscaledDeltaTime;
+            float k = Mathf.Clamp01(t / Mathf.Max(0.01f, menuFadeOutDuration));
+            _menuGroup.alpha = 1f - k;
+            if (_loadingGroup != null && loadingFadeInDuration > 0f)
+                _loadingGroup.alpha = Mathf.Clamp01(t / Mathf.Max(0.01f, loadingFadeInDuration));
             yield return null;
         }
 
-        // добираем минимальное время показа экрана, если загрузка была быстрее него
+        // прячем всё меню, кроме экрана загрузки
+        if (mainMenuPanel != null)
+            mainMenuPanel.SetActive(false);
+        HideOtherCanvasChildren();
+        if (_loadingGroup != null)
+            _loadingGroup.alpha = 1f;
+
+        SetStatus("Загружаем уровень...");
+        SetProgress(0f, true);
+        _tipIndex = -1;
+        _tipTimer = TipInterval;
+
+        // --- Фаза 1: асинхронная загрузка сцены до 90% ---
+        _loadOp = SceneManager.LoadSceneAsync(targetScene, LoadSceneMode.Additive);
+        if (_loadOp == null)
+        {
+            Debug.LogError("[GameLoader] Сцена "" + targetScene + "" не найдена. Добавь её в Build Settings (File -> Build Settings).");
+            RestoreMenu();
+            yield break;
+        }
+        _loadOp.allowSceneActivation = false;
+
+        float startTime = Time.unscaledTime;
+        while (_loadOp.progress < 0.9f)
+        {
+            SetProgress(Mathf.Clamp01(_loadOp.progress / 0.9f));
+            UpdateTips();
+            yield return null;
+        }
+        SetProgress(1f, true);
+        SetStatus("Почти готово...");
+
+        // не прячем экран быстрее minLoadTime
         while (Time.unscaledTime - startTime < minLoadTime)
         {
-            targetProgress = 0.9f;
+            UpdateTips();
             yield return null;
         }
 
-        // ===== ФАЗА 2: прогрев шейдеров ДО того, как игрок увидит уровень =====
-        if (statusText != null) statusText.text = "Подготовка сцены...";
-        targetProgress = 0.95f;
-
-        if (shaderWarmupCollection != null && !shaderWarmupCollection.isWarmedUp)
+        // --- Фаза 2: прогрев шейдеров ДО активации сцены ---
+        SetStatus("Прогреваем шейдеры...");
+        yield return null;
+        if (shaderWarmupCollection != null)
         {
-            // Синхронный прогрев — это ок именно здесь: экран загрузки уже показан,
-            // короткая пауза тут не ощущается как фриз в игре.
             shaderWarmupCollection.WarmUp();
-            yield return null;
         }
-
-        // ждём, пока бар (с ограниченной скоростью) реально доберётся до 0.9
-        while (currentProgress < 0.9f - 0.001f)
-            yield return null;
-
-        // ===== ФАЗА 3: активация сцены =====
-        targetProgress = 1f;
-        op.allowSceneActivation = true;
-
-        while (!op.isDone)
-            yield return null;
-
-        // ===== ФАЗА 4: прогрев ПОСЛЕ активации — вот это убирает фриз при первом движении =====
-        // Сцена активна, но Awake/Start новых объектов, физика, NavMesh и первый
-        // "тяжёлый" рендер-кадр ещё впереди. Держим загрузочный экран, пока это происходит.
-        if (statusText != null) statusText.text = "Запуск!";
-
-        float warmupTimer = 0f;
-        while (warmupTimer < postActivationWarmupTime)
+        else if (fallbackShaderWarmup)
         {
-            warmupTimer += Time.unscaledDeltaTime;
+            Shader.WarmupAllShaders();
+        }
+        yield return null;
+
+        // --- Фаза 3: активация уровня под замороженным временем ---
+        if (freezeGameTimeDuringWarmup)
+            Time.timeScale = 0f;
+        _loadOp.allowSceneActivation = true;
+        while (!_loadOp.isDone)
             yield return null;
+
+        Scene levelScene = SceneManager.GetSceneByName(targetScene);
+        if (levelScene.IsValid())
+            SceneManager.SetActiveScene(levelScene);
+
+        // гасим камеру, свет и звук меню, чтобы не мешали уровню
+        MuteMenuScene();
+
+        // --- Фаза 4: пост-активационный прогрев ---
+        Physics.SyncTransforms();
+        if (unloadUnusedAssetsDuringLoad)
+        {
+            AsyncOperation unload = Resources.UnloadUnusedAssets();
+            while (unload != null && !unload.isDone)
+                yield return null;
+            GC.Collect();
+        }
+        float warmupEnd = Time.unscaledTime + postActivationWarmupTime;
+        while (Time.unscaledTime < warmupEnd)
+            yield return null;
+
+        // --- Фаза 5: плавный выход в уровень ---
+        if (loadingScreenFadeOut && _loadingGroup != null)
+        {
+            t = 0f;
+            while (t < LoadingFadeOutDuration)
+            {
+                t += Time.unscaledDeltaTime;
+                _loadingGroup.alpha = 1f - Mathf.Clamp01(t / LoadingFadeOutDuration);
+                yield return null;
+            }
         }
 
-        // пара лишних кадров рендера "под капотом" загрузочного экрана
+        // возвращаем время и прячем экран загрузки
+        Time.timeScale = 1f;
+        yield return null;
         yield return new WaitForEndOfFrame();
         yield return new WaitForEndOfFrame();
-
         if (loadingPanel != null)
             loadingPanel.SetActive(false);
 
-        isLoading = false;
+        EnsureLevelEventSystem(levelScene);
 
-        // Мы пережили переход сцены через DontDestroyOnLoad — теперь, когда
-        // уровень полностью прогрет и запущен, эти объекты больше не нужны.
-        if (canvasRoot != null && canvasRoot != transform.root.gameObject)
-            Destroy(canvasRoot);
+        Debug.Log("[GameLoader] Уровень "" + targetScene + "" загружен и прогрет за " +
+                  (Time.unscaledTime - startTime).ToString("F2") + " с");
 
-        Destroy(transform.root.gameObject);
+        // выгружаем сцену меню (вместе с этим объектом)
+        SceneManager.UnloadSceneAsync(gameObject.scene);
     }
 
-    void UpdateProgressUI(float progress)
+    private void SetProgress(float target, bool instant = false)
     {
-        if (useWidthMethod)
-        {
-            if (progressFillRect != null)
-            {
-                float width = progress * maxProgressBarWidth;
-                progressFillRect.sizeDelta = new Vector2(width, progressFillRect.sizeDelta.y);
-                UpdateProgressColor(progress);
-            }
-        }
+        if (instant)
+            _displayProgress = target;
         else
-        {
-            if (progressFill != null)
-            {
-                progressFill.fillAmount = progress;
-                UpdateProgressColor(progress);
-            }
-        }
+            _displayProgress = Mathf.MoveTowards(_displayProgress, target, maxProgressFillSpeed * Time.unscaledDeltaTime);
+        ApplyProgress(_displayProgress);
+    }
 
+    private void ApplyProgress(float v)
+    {
+        v = Mathf.Clamp01(v);
+        if (useWidthMethod && progressFillRect != null)
+            progressFillRect.sizeDelta = new Vector2(Mathf.Lerp(0f, maxProgressBarWidth, v), progressFillRect.sizeDelta.y);
+        else if (progressFill != null)
+            progressFill.fillAmount = v;
+        if (progressFill != null)
+            progressFill.color = v < 0.5f
+                ? Color.Lerp(startColor, middleColor, v * 2f)
+                : Color.Lerp(middleColor, endColor, (v - 0.5f) * 2f);
         if (percentageText != null)
-        {
-            int percent = Mathf.RoundToInt(progress * 100);
-            percentageText.text = $"{percent}%";
-        }
+            percentageText.text = Mathf.RoundToInt(v * 100f) + "%";
     }
 
-    void UpdateProgressColor(float progress)
+    private void SetStatus(string s)
     {
-        if (progressFill == null) return;
+        if (statusText != null)
+            statusText.text = s;
+    }
 
-        Color fillColor;
-        if (progress < 0.5f)
+    private void UpdateTips()
+    {
+        if (tipText == null || loadingTips == null || loadingTips.Length == 0)
+            return;
+        _tipTimer += Time.unscaledDeltaTime;
+        if (_tipTimer < TipInterval)
+            return;
+        _tipTimer = 0f;
+        _tipIndex = (_tipIndex + 1) % loadingTips.Length;
+        string tip = loadingTips[_tipIndex];
+        if (!string.IsNullOrEmpty(tip))
+            tipText.text = tip;
+    }
+
+    private void HideOtherCanvasChildren()
+    {
+        if (loadingPanel == null)
+            return;
+        Canvas canvas = loadingPanel.GetComponentInParent<Canvas>(true);
+        if (canvas == null)
+            return;
+        var keep = new System.Collections.Generic.HashSet<Transform>();
+        Transform node = loadingPanel.transform;
+        while (node != null && node != canvas.transform)
         {
-            float t = progress * 2f;
-            fillColor = Color.Lerp(startColor, middleColor, t);
+            keep.Add(node);
+            node = node.parent;
         }
+        foreach (Transform child in canvas.transform)
+            if (!keep.Contains(child))
+                child.gameObject.SetActive(false);
+    }
+
+    private void MuteMenuScene()
+    {
+        Scene menuScene = gameObject.scene;
+        foreach (Camera cam in Camera.allCameras)
+            if (cam.gameObject.scene == menuScene)
+                cam.enabled = false;
+        foreach (Light l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+            if (l.gameObject.scene == menuScene)
+                l.enabled = false;
+        foreach (AudioListener al in FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
+            if (al.gameObject.scene == menuScene)
+                al.enabled = false;
+    }
+
+    private void EnsureLevelEventSystem(Scene levelScene)
+    {
+        Scene menuScene = gameObject.scene;
+        EventSystem menuSystem = null;
+        bool levelHas = false;
+        foreach (EventSystem es in FindObjectsByType<EventSystem>(FindObjectsSortMode.None))
+        {
+            if (es.gameObject.scene == menuScene) menuSystem = es;
+            else if (es.gameObject.scene == levelScene) levelHas = true;
+        }
+        if (levelHas || menuSystem == null)
+            return;
+        GameObject go = new GameObject("EventSystem");
+        SceneManager.MoveGameObjectToScene(go, levelScene);
+        go.AddComponent<EventSystem>();
+        if (menuSystem.GetComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>() != null)
+            go.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
         else
-        {
-            float t = (progress - 0.5f) * 2f;
-            fillColor = Color.Lerp(middleColor, endColor, t);
-        }
-
-        progressFill.color = fillColor;
+            go.AddComponent<StandaloneInputModule>();
+        Debug.LogWarning("[GameLoader] В уровне не было EventSystem, создали новый.");
     }
 
-    void UpdateStatusText(float realProgress)
+    private void RestoreMenu()
     {
-        if (statusText == null) return;
-
-        if (realProgress < 0.2f)
-            statusText.text = "Инициализация уровня...";
-        else if (realProgress < 0.4f)
-            statusText.text = "Загрузка ресурсов...";
-        else if (realProgress < 0.6f)
-            statusText.text = "Загрузка объектов...";
-        else if (realProgress < 0.8f)
-            statusText.text = "Построение уровня...";
-        else
-            statusText.text = "Финальная подготовка...";
+        _isLoading = false;
+        Time.timeScale = 1f;
+        if (loadingPanel != null)
+        {
+            loadingPanel.SetActive(false);
+            Canvas canvas = loadingPanel.GetComponentInParent<Canvas>(true);
+            if (canvas != null)
+                foreach (Transform child in canvas.transform)
+                    if (child.name != "ExitConfirmPanel")
+                        child.gameObject.SetActive(true);
+        }
+        if (mainMenuPanel != null)
+            mainMenuPanel.SetActive(true);
+        if (_menuGroup != null)
+            _menuGroup.alpha = 1f;
     }
 
-    void ShowRandomTip()
+    private static CanvasGroup GetOrAddCanvasGroup(GameObject go)
     {
-        if (tipText != null && loadingTips.Length > 0)
-        {
-            int randomIndex = Random.Range(0, loadingTips.Length);
-            tipText.text = $"Совет: {loadingTips[randomIndex]}";
-        }
-    }
-
-    bool SceneExists(string sceneName)
-    {
-        for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
-        {
-            string scenePath = SceneUtility.GetScenePathByBuildIndex(i);
-            string name = System.IO.Path.GetFileNameWithoutExtension(scenePath);
-            if (name == sceneName)
-                return true;
-        }
-        return false;
+        if (go == null)
+            return null;
+        CanvasGroup g = go.GetComponent<CanvasGroup>();
+        if (g == null)
+            g = go.AddComponent<CanvasGroup>();
+        return g;
     }
 }

@@ -1,37 +1,58 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
+/// Кнопка выхода из игры с подтверждением.
 public class ExitGame : MonoBehaviour
 {
-    [SerializeField] private Button exitButton; // ������ �� ������ ������
+    [Tooltip("Кнопка выхода в меню")]
+    public Button exitButton;
+    [Tooltip("Панель с вопросом «Ты уверен, что хочешь выйти?»")]
+    public GameObject confirmPanel;
 
-    void Start()
+    private void Awake()
     {
-        // ��������� ������� ������
+        if (confirmPanel != null)
+            confirmPanel.SetActive(false);
         if (exitButton != null)
-        {
-            // ��������� ����� ��������� �������
-            exitButton.onClick.RemoveAllListeners();
-            exitButton.onClick.AddListener(QuitGame);
-        }
-        else
-        {
-            Debug.LogError("Exit button not assigned in ExitGame script!");
-        }
+            exitButton.onClick.AddListener(RequestExit);
     }
 
-    /// <summary>
-    /// ����� �� ����
-    /// </summary>
-    void QuitGame()
+    private void Update()
     {
-        Debug.Log("Exiting game...");
+        if (confirmPanel == null || !confirmPanel.activeSelf)
+            return;
+        if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+            CancelExit();
+    }
 
-        // ����� �� ����
+    /// Показать панель подтверждения (вешается на кнопку Exit).
+    public void RequestExit()
+    {
+        if (confirmPanel != null)
+            confirmPanel.SetActive(true);
+    }
+
+    /// Скрыть панель подтверждения (кнопка «Отмена» или Esc).
+    public void CancelExit()
+    {
+        if (confirmPanel != null)
+            confirmPanel.SetActive(false);
+    }
+
+    /// Выйти из игры (вешается на кнопку «Да»).
+    public void ExitGame()
+    {
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #else
-            Application.Quit();
+        Application.Quit();
 #endif
     }
+
+    // Удобные псевдонимы для уже существующих привязок
+    public void Exit() { ExitGame(); }
+    public void QuitGame() { ExitGame(); }
+    public void ExitNow() { ExitGame(); }
+    public void ConfirmExit() { ExitGame(); }
 }
