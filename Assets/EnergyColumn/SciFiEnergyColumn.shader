@@ -8,6 +8,7 @@
 //
 // Быстрые рецепты:
 //   Ровно светящиеся трубы (убрать потоки) -> ① Стиль энергии = Steady Glow
+//   Кольцо светится целиком, не течёт      -> ② Куда течёт = Horizontal Ring, (Кольца) Длина капли = 1.2
 //   Все трубки текут одновременно           -> ⑤ галочка «Все трубки синхронно»
 //   Медленнее течение                      -> ③ Скорость: 2–3
 //   Быстрее                                -> ③ Скорость: 6–8
@@ -47,6 +48,7 @@ Shader "ProjectSphere/EnergyFlow"
 
         // ───────── ТОЛЬКО ДЛЯ РЕЖИМА «HORIZONTAL RING» (кольца) ────────
         _RingRadius("(Кольца) Радиус кольца, м", Float) = 1.46
+        _RingStreakSize("(Кольца) Длина капли, м (размер бегущих вспышек)", Range(0.2, 3)) = 1.2
         _RingPulses("(Кольца) Вспышек по кругу", Range(0, 20)) = 6
     }
 
@@ -78,6 +80,7 @@ Shader "ProjectSphere/EnergyFlow"
                 float _StreakSize;
                 float _Filaments;
                 float _RingRadius;
+                float _RingStreakSize;
                 float _Speed;
                 float _Trail;
                 float _Contrast;
@@ -176,9 +179,11 @@ Shader "ProjectSphere/EnergyFlow"
                 }
                 else
                 {
-                    // кольцо: выборка шума идёт по окружности — шва нет
-                    float a = angle - t * _StreakSize / _RingRadius + phase;
-                    float k = _RingRadius / _StreakSize;
+                    // кольцо: выборка шума идёт по окружности — шва нет.
+                    // длина капли у кольца СВОЯ (по умолчанию 1.2 м): на окружности
+                    // в ~9 м капли по 0.35 м сливаются в сплошное свечение
+                    float a = angle - t * _RingStreakSize / _RingRadius + phase;
+                    float k = _RingRadius / _RingStreakSize;
                     mask = vnoise3(float3(cos(a) * k, sin(a) * k, phase * 0.37));
                 }
 
