@@ -1,43 +1,45 @@
 // Шейдер энергии для Unity (URP) — течение по трубам без текстур и аниматоров.
-// Повторяет материал из Blender: бегущие «капли» + быстрые искры-бусины.
 // Назначается материалам из FBX:
-//   Energy - Flow Vertical  ->  ① Режим течения = Vertical Tube
-//   Energy - Flow Ring      ->  ① Режим течения = Horizontal Ring
+//   Energy - Flow Vertical  ->  ② Куда течёт = Vertical Tube
+//   Energy - Flow Ring      ->  ② Куда течёт = Horizontal Ring
 //
-// В материале параметры подписаны по-русски и пронумерованы ①–⑬:
-//   ①–⑧ — движение и форма капель, ⑨–⑬ — внешний вид.
-//   «(Трубки)» — действует только в режиме Vertical Tube, «(Кольца)» — только в Horizontal Ring.
+// Параметры в материале подписаны по-русски и пронумерованы ①–⑮:
+//   ①–⑩ — движение и форма, ⑪–⑮ — внешний вид.
 //
 // Быстрые рецепты:
-//   Медленнее течение       -> ② Скорость: 2–3
-//   Быстрее                 -> ② Скорость: 6–8
-//   Крупные редкие капли    -> ③ Длина капли 0.5, ④ Резкость 2.5
-//   Мелкие частые           -> ③ Длина капли 0.2
-//   Труба светится целиком  -> ⑤ Свечение пауз 0.1–0.3 (выше = снова «палка»)
-//   Убрать искры            -> ⑥ Яркость искр 0
-//   Bloom не светится        -> ⑧ Общая яркость 4–6
-//   Другой цвет             -> ⑪ Цвет энергии + ⑫ Цвет сердцевины (оранжевый = «лава»)
+//   Ровно светящиеся трубы (убрать потоки) -> ① Стиль энергии = Steady Glow
+//   Все трубки текут одновременно           -> ⑤ галочка «Все трубки синхронно»
+//   Медленнее течение                      -> ③ Скорость: 2–3
+//   Быстрее                                -> ③ Скорость: 6–8
+//   Крупные редкие капли                   -> ④ Длина капли: 0.7–1.0
+//   Мелкие частые                          -> ④ Длина капли: 0.2
+//   Труба светится целиком                 -> ⑦ Свечение пауз: 0.1–0.3
+//   Убрать искры                           -> ⑧ Яркость искр: 0
+//   Bloom не берёт                         -> ⑩ Общая яркость: 4–6
+//   Другой цвет                            -> ⑬ Цвет энергии + ⑭ Цвет сердцевины
 
 Shader "ProjectSphere/EnergyFlow"
 {
     Properties
     {
         // ───────── ГЛАВНОЕ: движение и форма ────────
-        [Enum(Vertical Tube, 0, Horizontal Ring, 1)] _FlowMode("① Режим течения (Vertical = трубки, Horizontal = кольца)", Float) = 0
-        _Speed("② Скорость течения, м/с", Range(0, 15)) = 4.0
-        _StreakSize("③ Длина капли, м", Range(0.05, 1.5)) = 0.35
-        _Contrast("④ Резкость капель (1 = мягкие, 3 = чёткие)", Range(0.5, 5)) = 1.7
-        _Trail("⑤ Свечение пауз (0 = тёмные промежутки)", Range(0, 1)) = 0.0
-        _Sparks("⑥ Яркость искр (0 = выключить)", Range(0, 5)) = 1.5
-        _SparkPeriod("⑦ Шаг искр, м (меньше = чаще)", Range(0.2, 5)) = 1.5
-        _Brightness("⑧ Общая яркость (сила свечения, для Bloom)", Range(0.5, 8)) = 3
+        [Enum(Flow Blobs, 0, Steady Glow, 1)] _GlowMode("① Стиль энергии (Flow = бегущие капли, Steady = ровное свечение)", Float) = 0
+        [Enum(Vertical Tube, 0, Horizontal Ring, 1)] _FlowMode("② Куда течёт (Vertical = трубки, Horizontal = кольца)", Float) = 0
+        _Speed("③ Скорость течения, м/с", Range(0, 15)) = 4.0
+        _StreakSize("④ Длина капли, м (длина одного бегущего сгустка)", Range(0.05, 1.5)) = 0.35
+        [Toggle] _SyncFlow("⑤ Все трубки синхронно (энергия идёт по всем трубам сразу)", Float) = 0
+        _Contrast("⑥ Резкость капель (1 = мягкие, 3 = чёткие)", Range(0.5, 5)) = 1.7
+        _Trail("⑦ Свечение пауз (0 = тёмные промежутки между каплями)", Range(0, 1)) = 0.0
+        _Sparks("⑧ Яркость искр (0 = выключить)", Range(0, 5)) = 1.5
+        _SparkPeriod("⑨ Шаг искр, м (меньше = чаще)", Range(0.2, 5)) = 1.5
+        _Brightness("⑩ Общая яркость (сила свечения, для Bloom)", Range(0.5, 8)) = 3
 
         // ───────── ВНЕШНИЙ ВИД ────────
-        [Toggle] _UseHotColor("⑨ Белые сердцевины у крупных капель", Float) = 1
-        _CenterBrightness("⑩ Объёмность стержня (0 = плоская заливка)", Range(0, 1)) = 1
-        _ColorMid("⑪ Цвет энергии (капли)", Color) = (0, 1, 0.1, 1)
-        _ColorHot("⑫ Цвет сердцевины (яркая середина)", Color) = (0.65, 1, 0.75, 1)
-        _ColorDeep("⑬ Цвет пауз (обычно чёрный)", Color) = (0, 0, 0, 0)
+        [Toggle] _UseHotColor("⑪ Белые сердцевины у крупных капель", Float) = 1
+        _CenterBrightness("⑫ Объёмность стержня (0 = плоская заливка)", Range(0, 1)) = 1
+        _ColorMid("⑬ Цвет энергии (капли)", Color) = (0, 1, 0.1, 1)
+        _ColorHot("⑭ Цвет сердцевины (яркая середина)", Color) = (0.65, 1, 0.75, 1)
+        _ColorDeep("⑮ Цвет пауз (обычно чёрный)", Color) = (0, 0, 0, 0)
 
         // ───────── ТОЛЬКО ДЛЯ РЕЖИМА «VERTICAL TUBE» (трубки) ────────
         _CoreRadius("(Трубки) Толщина стержня, м", Range(0.005, 0.1)) = 0.018
@@ -70,6 +72,7 @@ Shader "ProjectSphere/EnergyFlow"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
+                float _GlowMode;
                 float _FlowMode;
                 float _CoreRadius;
                 float _StreakSize;
@@ -87,6 +90,7 @@ Shader "ProjectSphere/EnergyFlow"
                 float4 _ColorHot;
                 float _UseHotColor;
                 float _CenterBrightness;
+                float _SyncFlow;
             CBUFFER_END
 
             struct Attributes
@@ -145,15 +149,22 @@ Shader "ProjectSphere/EnergyFlow"
                 // время — аналог Scene Time * скорость из Blender
                 float t = _Time.y * _Speed;
 
-                // фаза каждой трубки из позиции объекта:
-                // соседние трубки текут с разным сдвигом, не синхронно
+                // ⑤ фаза каждой трубки из её позиции: соседние трубки текут
+                // с разным сдвигом. Галочка «Все трубки синхронно» обнуляет
+                // сдвиг — вся энергия идёт по всем трубам одновременно.
                 float3 objPosWS = float3(UNITY_MATRIX_M[0].w, UNITY_MATRIX_M[1].w, UNITY_MATRIX_M[2].w);
                 float phase = frac(sin(dot(objPosWS, float3(12.9898, 78.233, 37.719))) * 43758.5453) * 6.28318;
+                if (_SyncFlow > 0.5) phase = 0.0;
 
                 float angle = atan2(IN.positionOS.z, IN.positionOS.x);
 
                 float mask;
-                if (_FlowMode < 0.5)
+                if (_GlowMode > 0.5)
+                {
+                    // ① Steady Glow: ровное свечение, без капель и потоков
+                    mask = 1.0;
+                }
+                else if (_FlowMode < 0.5)
                 {
                     // вертикальная трубка: шум вытянут вдоль Y (капли) и сжат вокруг оси
                     float crossFreq = _Filaments / (6.28318 * _CoreRadius);
@@ -173,10 +184,10 @@ Shader "ProjectSphere/EnergyFlow"
 
                 // контраст: мягкий шум -> резкие капли, между ними тёмные паузы
                 mask = saturate((mask - 0.38) / 0.30);      // 0.38..0.68 -> 0..1
-                mask = pow(mask, _Contrast);                // ④ затачиваем края капель
-                mask = lerp(_Trail, 1.0, mask);             // ⑤ Trail = 0 -> тёмные паузы
+                mask = pow(mask, _Contrast);                // ⑥ затачиваем края капель
+                mask = lerp(_Trail, 1.0, mask);             // ⑦ Trail = 0 -> тёмные паузы
 
-                // быстрые искры-бусины поверх капель (⑥⑦)
+                // быстрые искры-бусины поверх капель (⑧⑨)
                 if (_Sparks > 0.001)
                 {
                     float s;
@@ -187,19 +198,19 @@ Shader "ProjectSphere/EnergyFlow"
                     mask += pow(s * 0.5 + 0.5, 12.0) * _Sparks;
                 }
 
-                // объёмный стержень: центр трубки ярче краёв (⑩)
+                // объёмный стержень: центр трубки ярче краёв (⑫)
                 float ndv = saturate(dot(normalize(IN.normalWS), normalize(IN.viewDirWS)));
                 float centerEffect = pow(ndv, 1.5) * 0.8 + 0.2;
                 float center = lerp(1.0, centerEffect, _CenterBrightness);
 
                 float bright = mask * center;
 
-                // цвет: паузы чёрные -> цветные капли -> светлые сердцевины (⑪⑫⑬, ⑨)
+                // цвет: паузы чёрные -> цветные капли -> светлые сердцевины (⑬⑭⑮, ⑪)
                 float3 col = lerp(_ColorDeep.rgb, _ColorMid.rgb, saturate(bright * 2.0));
                 float hotBlend = saturate((bright - 0.5) * 2.0) * _UseHotColor;
                 col = lerp(col, _ColorHot.rgb, hotBlend);
 
-                float3 emission = col * bright * _Brightness;   // ⑧
+                float3 emission = col * bright * _Brightness;   // ⑩
                 return half4(emission, 1.0);
             }
             ENDHLSL
