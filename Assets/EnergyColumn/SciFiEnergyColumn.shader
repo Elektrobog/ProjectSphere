@@ -1,29 +1,51 @@
 // Шейдер энергии для Unity (URP) — течение по трубам без текстур и аниматоров.
 // Повторяет материал из Blender: бегущие «капли» + быстрые искры-бусины.
-// Присваивается материалам из FBX:
-//   Energy - Flow Vertical  ->  Flow Mode = Vertical Tube
-//   Energy - Flow Ring      ->  Flow Mode = Horizontal Ring
-// Bloom: Global Volume -> Bloom (Threshold ~0.8), в URP Asset включить Post Processing и HDR.
+// Назначается материалам из FBX:
+//   Energy - Flow Vertical  ->  ① Режим течения = Трубки
+//   Energy - Flow Ring      ->  ① Режим течения = Кольца
+//
+// В материале параметры подписаны по-русски и пронумерованы ①–⑬:
+//   ①–⑧ — движение и форма капель, ⑨–⑬ — внешний вид.
+//   «(Трубки)» — действует только в режиме Трубки, «(Кольца)» — только в режиме Кольца.
+//
+// Быстрые рецепты:
+//   Медленнее течение       -> ② Скорость: 2–3
+//   Быстрее                 -> ② Скорость: 6–8
+//   Крупные редкие капли    -> ③ Длина капли 0.5, ④ Резкость 2.5
+//   Мелкие частые           -> ③ Длина капли 0.2
+//   Труба светится целиком  -> ⑤ Свечение пауз 0.1–0.3 (выше = снова «палка»)
+//   Убрать искры            -> ⑥ Яркость искр 0
+//   Bloom не светится        -> ⑧ Общая яркость 4–6
+//   Другой цвет             -> ⑪ Цвет энергии + ⑫ Цвет сердцевины (оранжевый = «лава»)
 
 Shader "ProjectSphere/EnergyFlow"
 {
     Properties
     {
-        [Enum(Vertical Tube, 0, Horizontal Ring, 1)] _FlowMode("Flow Mode", Float) = 0
-        _CoreRadius("Core Radius, m (Vertical)", Float) = 0.018
-        _StreakSize("Blob Length, m", Float) = 0.35
-        _Filaments("Filaments Around Core", Float) = 3
-        _RingRadius("Ring Radius, m (Ring)", Float) = 1.46
-        _Speed("Flow Speed (units/sec)", Float) = 4.0
-        _Trail("Min Brightness (pauses)", Range(0, 1)) = 0.0
-        _Contrast("Blob Contrast", Float) = 1.7
-        _SparkPeriod("Spark Period, m", Float) = 1.5
-        _RingPulses("Ring Pulses (Ring)", Float) = 6
-        _Sparks("Spark Brightness", Float) = 1.5
-        _Brightness("Overall Brightness", Float) = 3
-        _ColorDeep("Deep Color (pauses)", Color) = (0, 0, 0, 0)
-        _ColorMid("Mid Color", Color) = (0, 1, 0.1, 1)
-        _ColorHot("Hot Color (cores)", Color) = (0.65, 1, 0.75, 1)
+        // ───────── ГЛАВНОЕ: движение и форма ────────
+        [Enum(Трубки, 0, Кольца, 1)] _FlowMode("① Режим течения (Трубки / Кольца)", Float) = 0
+        _Speed("② Скорость течения, м/с", Range(0, 15)) = 4.0
+        _StreakSize("③ Длина капли, м", Range(0.05, 1.5)) = 0.35
+        _Contrast("④ Резкость капель (1 = мягкие, 3 = чёткие)", Range(0.5, 5)) = 1.7
+        _Trail("⑤ Свечение пауз (0 = тёмные промежутки)", Range(0, 1)) = 0.0
+        _Sparks("⑥ Яркость искр (0 = выключить)", Range(0, 5)) = 1.5
+        _SparkPeriod("⑦ Шаг искр, м (меньше = чаще)", Range(0.2, 5)) = 1.5
+        _Brightness("⑧ Общая яркость (сила свечения, для Bloom)", Range(0.5, 8)) = 3
+
+        // ───────── ВНЕШНИЙ ВИД ────────
+        [Toggle] _UseHotColor("⑨ Белые сердцевины у крупных капель", Float) = 1
+        _CenterBrightness("⑩ Объёмность стержня (0 = плоская заливка)", Range(0, 1)) = 1
+        _ColorMid("⑪ Цвет энергии (капли)", Color) = (0, 1, 0.1, 1)
+        _ColorHot("⑫ Цвет сердцевины (яркая середина)", Color) = (0.65, 1, 0.75, 1)
+        _ColorDeep("⑬ Цвет пауз (обычно чёрный)", Color) = (0, 0, 0, 0)
+
+        // ───────── ТОЛЬКО ДЛЯ РЕЖИМА «ТРУБКИ» ────────
+        _CoreRadius("(Трубки) Толщина стержня, м", Range(0.005, 0.1)) = 0.018
+        _Filaments("(Трубки) Прожилки вокруг стержня (0–6)", Range(0, 6)) = 3
+
+        // ───────── ТОЛЬКО ДЛЯ РЕЖИМА «КОЛЬЦА» ────────
+        _RingRadius("(Кольца) Радиус кольца, м", Float) = 1.46
+        _RingPulses("(Кольца) Вспышек по кругу", Range(0, 20)) = 6
     }
 
     SubShader
@@ -63,6 +85,8 @@ Shader "ProjectSphere/EnergyFlow"
                 float4 _ColorDeep;
                 float4 _ColorMid;
                 float4 _ColorHot;
+                float _UseHotColor;
+                float _CenterBrightness;
             CBUFFER_END
 
             struct Attributes
@@ -149,10 +173,10 @@ Shader "ProjectSphere/EnergyFlow"
 
                 // контраст: мягкий шум -> резкие капли, между ними тёмные паузы
                 mask = saturate((mask - 0.38) / 0.30);      // 0.38..0.68 -> 0..1
-                mask = pow(mask, _Contrast);                 // затачиваем края капель
-                mask = lerp(_Trail, 1.0, mask);              // Trail = 0 -> тёмные паузы
+                mask = pow(mask, _Contrast);                // ④ затачиваем края капель
+                mask = lerp(_Trail, 1.0, mask);             // ⑤ Trail = 0 -> тёмные паузы
 
-                // быстрые искры-бусины поверх капель
+                // быстрые искры-бусины поверх капель (⑥⑦)
                 if (_Sparks > 0.001)
                 {
                     float s;
@@ -163,16 +187,19 @@ Shader "ProjectSphere/EnergyFlow"
                     mask += pow(s * 0.5 + 0.5, 12.0) * _Sparks;
                 }
 
-                // центр стержня ярче, края темнее (аналог Layer Weight в Blender)
+                // объёмный стержень: центр трубки ярче краёв (⑩)
                 float ndv = saturate(dot(normalize(IN.normalWS), normalize(IN.viewDirWS)));
-                float center = pow(ndv, 1.5) * 0.8 + 0.2;
+                float centerEffect = pow(ndv, 1.5) * 0.8 + 0.2;
+                float center = lerp(1.0, centerEffect, _CenterBrightness);
+
                 float bright = mask * center;
 
-                // цвет: паузы чёрные -> зелёные капли -> бело-зелёные сердцевины
+                // цвет: паузы чёрные -> цветные капли -> светлые сердцевины (⑪⑫⑬, ⑨)
                 float3 col = lerp(_ColorDeep.rgb, _ColorMid.rgb, saturate(bright * 2.0));
-                col = lerp(col, _ColorHot.rgb, saturate((bright - 0.5) * 2.0));
+                float hotBlend = saturate((bright - 0.5) * 2.0) * _UseHotColor;
+                col = lerp(col, _ColorHot.rgb, hotBlend);
 
-                float3 emission = col * bright * _Brightness;
+                float3 emission = col * bright * _Brightness;   // ⑧
                 return half4(emission, 1.0);
             }
             ENDHLSL
