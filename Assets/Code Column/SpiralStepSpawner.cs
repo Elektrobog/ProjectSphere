@@ -12,6 +12,8 @@ using UnityEditor;
 /// </summary>
 public class SpiralPlatformMarker : MonoBehaviour
 {
+    [HideInInspector] public string spawnerId;
+    [HideInInspector] public string platformId;
 }
 
 [AddComponentMenu("Custom/Spiral Step Spawner")]
@@ -43,6 +45,8 @@ public class SpiralStepSpawner : MonoBehaviour
     [System.Serializable]
     public class PlatformSettings
     {
+        [HideInInspector] public string id;
+
         [Header("Позиция")]
         public float height = 5f;
         public float customRadius = 0f;
@@ -91,6 +95,11 @@ public class SpiralStepSpawner : MonoBehaviour
     [Header("СПИСОК ПЛАТФОРМ")]
     public List<PlatformSettings> platforms = new List<PlatformSettings>();
 
+    [Tooltip("При добавлении следующей платформы её высота увеличивается на это значение.")]
+    public float heightStep = 2f;
+
+    [SerializeField, HideInInspector] private string spawnerId = "";
+
     [Header("МАТЕРИАЛЫ")]
     public Material defaultMaterial;
     public Color defaultColor = new Color(0.75f, 0.78f, 0.85f, 1.0f);
@@ -119,6 +128,7 @@ public class SpiralStepSpawner : MonoBehaviour
 
     private void Start()
     {
+        EnsurePlatformIds();
         if (autoFindColumn) columnCenter = FindColumnCenter();
         if (generateOnStart)
         {
@@ -207,6 +217,9 @@ public class SpiralStepSpawner : MonoBehaviour
         }
 #endif
 
+        EnsurePlatformIds();
+        if (string.IsNullOrEmpty(spawnerId)) spawnerId = System.Guid.NewGuid().ToString("N");
+
         if (destroyPreviousOnGenerate) ClearPlatforms(destroyImmediate);
 
         if (platforms.Count == 0)
@@ -237,10 +250,10 @@ public class SpiralStepSpawner : MonoBehaviour
 #endif
 
             // Метка спавнера — на КАЖДУЮ платформу, даже на стоячую
-            if (platformObj.GetComponent<SpiralPlatformMarker>() == null)
-            {
-                platformObj.AddComponent<SpiralPlatformMarker>();
-            }
+            SpiralPlatformMarker marker = platformObj.GetComponent<SpiralPlatformMarker>();
+            if (marker == null) marker = platformObj.AddComponent<SpiralPlatformMarker>();
+            marker.spawnerId = spawnerId;
+            marker.platformId = settings.id;
 
             // ФИЗИКА: делаем платформу кинематиком, чтобы она не падала под гравитацией
             Rigidbody platformRb = platformObj.GetComponent<Rigidbody>();
@@ -431,8 +444,68 @@ public class SpiralStepSpawner : MonoBehaviour
         }
     }
 
+    private void EnsurePlatformIds()
+    {
+        if (string.IsNullOrEmpty(spawnerId))
+            spawnerId = System.Guid.NewGuid().ToString("N");
+
+        var used = new HashSet<string>();
+        foreach (var platform in platforms)
+        {
+            if (platform == null) continue;
+            if (string.IsNullOrEmpty(platform.id) || used.Contains(platform.id))
+                platform.id = System.Guid.NewGuid().ToString("N");
+            used.Add(platform.id);
+        }
+    }
+
     [ContextMenu("Add Platform")]
-    public void AddPlatform() => platforms.Add(new PlatformSettings());
+    public void AddPlatform()
+    {
+        EnsurePlatformIds();
+        PlatformSettings next = new PlatformSettings();
+        if (platforms.Count > 0)
+        {
+            PlatformSettings previous = platforms[platforms.Count - 1];
+            next.height = previous.height + heightStep;
+            next.customRadius = previous.customRadius;
+            next.spawnPosition = previous.spawnPosition;
+            next.enableRotation = previous.enableRotation;
+            next.rotationSpeed = previous.rotationSpeed;
+            next.clockwise = previous.clockwise;
+            next.customMaterial = previous.customMaterial;
+        }
+        next.id = System.Guid.NewGuid().ToString("N");
+        platforms.Add(next);
+    }
+
+    public void RemovePlatformAt(int index)
+    {
+        if (index < 0 || index >= platforms.Count) return;
+        EnsurePlatformIds();
+        string idToRemove = platforms[index].id;
+        Transform center = FindColumnCenter();
+        if (center != null)
+        {
+            List<GameObject> found = new List<GameObject>();
+            CollectPlatformObjects(center, found);
+            foreach (GameObject obj in found)
+            {
+                if (obj == null) continue;
+                SpiralPlatformMarker marker = obj.GetComponent<SpiralPlatformMarker>();
+                if (marker == null || marker.spawnerId != spawnerId || marker.platformId != idToRemove) continue;
+#if UNITY_EDITOR
+                if (!Application.isPlaying) Undo.DestroyObjectImmediate(obj);
+                else
+#endif
+                    Destroy(obj);
+            }
+        }
+        spawnedPlatforms.RemoveAll(obj => obj == null ||
+            (obj.GetComponent<SpiralPlatformMarker>() != null &&
+             obj.GetComponent<SpiralPlatformMarker>().platformId == idToRemove));
+        platforms.RemoveAt(index);
+    }
 
     [ContextMenu("Clear Platform List")]
     public void ClearPlatformList() => platforms.Clear();
@@ -528,6 +601,7 @@ public class SpiralStepSpawnerEditor : Editor
 
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label("СПИСОК ПЛАТФОРМ", EditorStyles.boldLabel);
+        spawner.heightStep = EditorGUILayout.FloatField("Шаг высоты новой платформы", spawner.heightStep);
 
         EditorGUILayout.HelpBox("Итоговый угол каждой платформы = Start Angle (стартовая точка, в доп. настройках) + «Угол» платформы из списка. Пример: Start Angle = 0, угол платформы = 90 — платформа встанет на 90° от стартовой точки по окружности колонны (XZ: 0 = вправо X+, 90 = вперёд Z+). Поворот платформы (XZ): нос всегда наружу от колонны + Rotation Offset (0 = строго наружу).", MessageType.Info);
 
@@ -551,29 +625,43 @@ public class SpiralStepSpawnerEditor : Editor
         for (int i = 0; i < spawner.platforms.Count; i++)
         {
             var p = spawner.platforms[i];
+            if (p == null) continue;
+
+            string foldoutKey = spawner.GetInstanceID() + "_" + i;
+            bool expanded = EditorPrefs.GetBool("SpiralStepSpawner_Foldout_" + foldoutKey, false);
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField($"Платформа #{i + 1}", EditorStyles.boldLabel);
-
-            p.height = EditorGUILayout.FloatField("Height", p.height);
-            p.customRadius = EditorGUILayout.FloatField("Custom Radius", p.customRadius);
-            p.spawnPosition = EditorGUILayout.Slider("Угол (° от стартовой точки)", p.spawnPosition, 0f, 360f);
-
-            if (spawner.rotationMode == SpiralStepSpawner.RotationMode.PerPlatform)
+            EditorGUILayout.BeginHorizontal();
+            expanded = EditorGUILayout.Foldout(expanded, $"Платформа #{i + 1}  •  высота {p.height:0.##}", true);
+            EditorPrefs.SetBool("SpiralStepSpawner_Foldout_" + foldoutKey, expanded);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Удалить", GUILayout.Width(75)))
             {
-                p.enableRotation = EditorGUILayout.Toggle("Enable Rotation", p.enableRotation);
-            }
-
-            p.rotationSpeed = EditorGUILayout.FloatField("Rotation Speed", p.rotationSpeed);
-            p.clockwise = EditorGUILayout.Toggle("Clockwise", p.clockwise);
-            p.customMaterial = (Material)EditorGUILayout.ObjectField("Custom Material", p.customMaterial, typeof(Material), false);
-
-            if (GUILayout.Button("Удалить"))
-            {
-                spawner.platforms.RemoveAt(i);
+                Undo.RecordObject(spawner, "Remove Spiral Platform");
+                spawner.RemovePlatformAt(i);
+                EditorUtility.SetDirty(spawner);
+                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.EndVertical();
                 break;
             }
+            EditorGUILayout.EndHorizontal();
+
+            if (expanded)
+            {
+                EditorGUI.indentLevel++;
+                p.height = EditorGUILayout.FloatField("Высота", p.height);
+                p.customRadius = EditorGUILayout.FloatField("Радиус (0 = общий)", p.customRadius);
+                p.spawnPosition = EditorGUILayout.Slider("Угол от стартовой точки", p.spawnPosition, 0f, 360f);
+
+                if (spawner.rotationMode == SpiralStepSpawner.RotationMode.PerPlatform)
+                    p.enableRotation = EditorGUILayout.Toggle("Вращение", p.enableRotation);
+
+                p.rotationSpeed = EditorGUILayout.FloatField("Скорость вращения", p.rotationSpeed);
+                p.clockwise = EditorGUILayout.Toggle("По часовой стрелке", p.clockwise);
+                p.customMaterial = (Material)EditorGUILayout.ObjectField("Материал", p.customMaterial, typeof(Material), false);
+                EditorGUI.indentLevel--;
+            }
             EditorGUILayout.EndVertical();
-            GUILayout.Space(5);
+            GUILayout.Space(4);
         }
         EditorGUILayout.EndVertical();
 
