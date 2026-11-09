@@ -44,8 +44,6 @@ public class GameLoader : MonoBehaviour
     public bool unloadUnusedAssetsDuringLoad = true;
 
     [Header("Плавные переходы")]
-    [Tooltip("Плавно растворять экран загрузки в начале уровня")]
-    public bool loadingScreenFadeOut = true;
     [Tooltip("Длительность растворения меню, сек")]
     public float menuFadeOutDuration = 0.25f;
     [Tooltip("Длительность появления экрана загрузки, сек")]
@@ -62,7 +60,6 @@ public class GameLoader : MonoBehaviour
     public bool useWidthMethod = true;
     public float maxProgressBarWidth = 250f;
 
-    private const float LoadingFadeOutDuration = 0.35f;
     private const float TipInterval = 2.5f;
 
     private AsyncOperation _loadOp;
@@ -96,6 +93,7 @@ public class GameLoader : MonoBehaviour
         // --- Фаза 0: плавный переход меню -> экран загрузки ---
         if (loadingPanel != null)
             loadingPanel.SetActive(true);
+        EnsureLoadingCanvasOnTop();
 
         _menuGroup = GetOrAddCanvasGroup(mainMenuPanel);
         _loadingGroup = GetOrAddCanvasGroup(loadingPanel);
@@ -190,27 +188,19 @@ public class GameLoader : MonoBehaviour
         while (Time.unscaledTime < warmupEnd)
             yield return null;
 
-        // --- Фаза 5: плавный выход в уровень ---
-        if (loadingScreenFadeOut && _loadingGroup != null)
-        {
-            t = 0f;
-            while (t < LoadingFadeOutDuration)
-            {
-                t += Time.unscaledDeltaTime;
-                _loadingGroup.alpha = 1f - Mathf.Clamp01(t / LoadingFadeOutDuration);
-                yield return null;
-            }
-        }
-
-        // возвращаем время и прячем экран загрузки
-        Time.timeScale = 1f;
+        // --- Фаза 5: показываем только полностью подготовленный уровень ---
+        // Даём сцене отрисоваться под непрозрачным экраном загрузки.
+        // Это позволяет Canvas, HUD и объектам сцены завершить первый кадр инициализации.
+        EnsureLevelEventSystem(levelScene);
+        yield return new WaitForEndOfFrame();
         yield return null;
         yield return new WaitForEndOfFrame();
-        yield return new WaitForEndOfFrame();
+
+        // Скрываем экран и размораживаем время в одном кадре:
+        // игрок не увидит промежуточное состояние с появившимся HUD и остановленным миром.
         if (loadingPanel != null)
             loadingPanel.SetActive(false);
-
-        EnsureLevelEventSystem(levelScene);
+        Time.timeScale = 1f;
 
         Debug.Log("[GameLoader] Уровень '" + targetScene + "' загружен и прогрет за " +
                   (Time.unscaledTime - startTime).ToString("F2") + " с");
@@ -261,6 +251,20 @@ public class GameLoader : MonoBehaviour
         string tip = loadingTips[_tipIndex];
         if (!string.IsNullOrEmpty(tip))
             tipText.text = tip;
+    }
+
+    private void EnsureLoadingCanvasOnTop()
+    {
+        if (loadingPanel == null)
+            return;
+
+        Canvas canvas = loadingPanel.GetComponentInParent<Canvas>(true);
+        if (canvas == null)
+            return;
+
+        // Экран загрузки должен перекрывать HUD новой сцены.
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = short.MaxValue;
     }
 
     private void HideOtherCanvasChildren()
