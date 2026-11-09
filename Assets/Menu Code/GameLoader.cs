@@ -118,7 +118,7 @@ public class GameLoader : MonoBehaviour
         if (_loadingGroup != null)
             _loadingGroup.alpha = 1f;
 
-        SetStatus("Загружаем уровень...");
+        SetStatus("Подготавливаем уровень...");
         SetProgress(0f, true);
         _tipIndex = -1;
         _tipTimer = TipInterval;
@@ -141,7 +141,7 @@ public class GameLoader : MonoBehaviour
             yield return null;
         }
         SetProgress(1f, true);
-        SetStatus("Почти готово...");
+        SetStatus("Ещё немного...");
 
         // не прячем экран быстрее minLoadTime
         while (Time.unscaledTime - startTime < minLoadTime)
@@ -151,7 +151,7 @@ public class GameLoader : MonoBehaviour
         }
 
         // --- Фаза 2: прогрев шейдеров ДО активации сцены ---
-        SetStatus("Прогреваем шейдеры...");
+        SetStatus("Подготавливаем графику...");
         yield return null;
         if (shaderWarmupCollection != null)
         {
