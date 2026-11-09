@@ -28,7 +28,7 @@ public class GameLoader : MonoBehaviour
     public string targetScene = "Level 1";
     [Tooltip("Минимальное время показа экрана загрузки")]
     public float minLoadTime = 2f;
-    [Tooltip("Пауза после активации уровня: физика, GC, первые кадры")]
+    [Tooltip("Пауза после активации уровня: физика, GC, первые кадр")]
     public float postActivationWarmupTime = 0.6f;
     [Tooltip("Максимальная скорость полосы прогресса (0..1 в секунду)")]
     public float maxProgressFillSpeed = 0.7f;
@@ -127,7 +127,7 @@ public class GameLoader : MonoBehaviour
         _loadOp = SceneManager.LoadSceneAsync(targetScene, LoadSceneMode.Additive);
         if (_loadOp == null)
         {
-            Debug.LogError("[GameLoader] Сцена "" + targetScene + "" не найдена. Добавь её в Build Settings (File -> Build Settings).");
+            Debug.LogError("[GameLoader] Сцена '" + targetScene + "' не найдена. Добавь её в Build Settings (File -> Build Settings).");
             RestoreMenu();
             yield break;
         }
@@ -212,7 +212,7 @@ public class GameLoader : MonoBehaviour
 
         EnsureLevelEventSystem(levelScene);
 
-        Debug.Log("[GameLoader] Уровень "" + targetScene + "" загружен и прогрет за " +
+        Debug.Log("[GameLoader] Уровень '" + targetScene + "' загружен и прогрет за " +
                   (Time.unscaledTime - startTime).ToString("F2") + " с");
 
         // выгружаем сцену меню (вместе с этим объектом)
