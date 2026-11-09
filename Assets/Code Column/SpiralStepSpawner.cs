@@ -352,13 +352,20 @@ public class SpiralStepSpawner : MonoBehaviour
             else if (defaultMaterial != null) meshRenderer.sharedMaterial = defaultMaterial;
 
             // Вращение
-            if (ShouldRotate(settings))
+            RotatingPlatform rotating = platformObj.GetComponent<RotatingPlatform>();
+            bool shouldRotate = ShouldRotate(settings);
+            if (shouldRotate)
             {
-                RotatingPlatform rotating = platformObj.GetComponent<RotatingPlatform>();
                 if (rotating == null) rotating = platformObj.AddComponent<RotatingPlatform>();
+                rotating.enabled = true;
                 rotating.Initialize(center);
                 rotating.angularSpeed = settings.rotationSpeed;
                 rotating.clockwise = settings.clockwise;
+            }
+            else if (rotating != null)
+            {
+                // Важно: если компонент был в самом префабе, он тоже должен отключаться.
+                rotating.enabled = false;
             }
 
             spawnedPlatforms.Add(platformObj);
@@ -434,8 +441,10 @@ public class SpiralStepSpawner : MonoBehaviour
     {
         foreach (Transform child in root)
         {
-            if (child.GetComponent<SpiralPlatformMarker>() != null ||
-                child.GetComponent<RotatingPlatform>() != null)
+            SpiralPlatformMarker marker = child.GetComponent<SpiralPlatformMarker>();
+            // Учитываем только объекты, принадлежащие этому экземпляру спавнера.
+            // Это не позволяет одному спавнеру удалить платформы другого.
+            if (marker != null && marker.spawnerId == spawnerId)
             {
                 list.Add(child.gameObject);
                 continue;
@@ -501,9 +510,12 @@ public class SpiralStepSpawner : MonoBehaviour
                     Destroy(obj);
             }
         }
-        spawnedPlatforms.RemoveAll(obj => obj == null ||
-            (obj.GetComponent<SpiralPlatformMarker>() != null &&
-             obj.GetComponent<SpiralPlatformMarker>().platformId == idToRemove));
+        spawnedPlatforms.RemoveAll(obj =>
+        {
+            if (obj == null) return true;
+            SpiralPlatformMarker marker = obj.GetComponent<SpiralPlatformMarker>();
+            return marker != null && marker.spawnerId == spawnerId && marker.platformId == idToRemove;
+        });
         platforms.RemoveAt(index);
     }
 
@@ -627,7 +639,8 @@ public class SpiralStepSpawnerEditor : Editor
             var p = spawner.platforms[i];
             if (p == null) continue;
 
-            string foldoutKey = spawner.GetInstanceID() + "_" + i;
+            // Ключ по постоянному ID, чтобы раскрытие не перескакивало после удаления элементов.
+            string foldoutKey = spawner.GetInstanceID() + "_" + p.id;
             bool expanded = EditorPrefs.GetBool("SpiralStepSpawner_Foldout_" + foldoutKey, false);
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             EditorGUILayout.BeginHorizontal();
