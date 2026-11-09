@@ -24,6 +24,8 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
     {
         rb = GetComponent<Rigidbody>();
         rb.isKinematic = true;
+        // Сглаживает движение между физическими шагами — без этого платформа вращается рывками
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
 
         if (rotationCenter != null)
             Initialize(rotationCenter);
