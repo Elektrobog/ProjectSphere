@@ -41,7 +41,7 @@ public class ExitGame : MonoBehaviour
     }
 
     /// Выйти из игры (вешается на кнопку «Да»).
-    public void ExitGame()
+    public void ExitApplication()
     {
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
@@ -50,9 +50,9 @@ public class ExitGame : MonoBehaviour
 #endif
     }
 
-    // Удобные псевдонимы для уже существующих привязок
-    public void Exit() { ExitGame(); }
-    public void QuitGame() { ExitGame(); }
-    public void ExitNow() { ExitGame(); }
-    public void ConfirmExit() { ExitGame(); }
+    // Удобные псевдонимы для уже существующих привязок.
+    public void Exit() { ExitApplication(); }
+    public void QuitGame() { ExitApplication(); }
+    public void ExitNow() { ExitApplication(); }
+    public void ConfirmExit() { ExitApplication(); }
 }
