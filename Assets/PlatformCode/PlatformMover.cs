@@ -1,7 +1,7 @@
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
-public class PlatformMover : MonoBehaviour
+public class PlatformMover : MonoBehaviour, IPlatformVelocityProvider
 {
     [Header("Waypoints")]
     public Transform pointA;
@@ -15,11 +15,17 @@ public class PlatformMover : MonoBehaviour
     private Rigidbody rb;
     private Vector3 targetPosition;
     private bool movingToB;
+    private Vector3 currentVelocity;
+
+    // IPlatformVelocityProvider: the ball rides along with this platform
+    public Vector3 GetVelocityAtPoint(Vector3 worldPoint) => currentVelocity;
+    public Vector3 GetAngularVelocity() => Vector3.zero;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
         rb.isKinematic = true;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
     }
 
     void Start()
@@ -48,6 +54,7 @@ public class PlatformMover : MonoBehaviour
     void FixedUpdate()
     {
         Vector3 newPos = Vector3.MoveTowards(transform.position, targetPosition, speed * Time.fixedDeltaTime);
+        currentVelocity = (newPos - transform.position) / Time.fixedDeltaTime;
         rb.MovePosition(newPos);
 
         if (Vector3.Distance(transform.position, targetPosition) < 0.01f)
@@ -59,6 +66,7 @@ public class PlatformMover : MonoBehaviour
             }
             else
             {
+                currentVelocity = Vector3.zero;
                 enabled = false;
             }
         }

@@ -93,6 +93,17 @@ public class BallController : MonoBehaviour
     [Range(0f, 1f)]
     public float uphillTorqueMultiplier = 0.5f;
 
+    [Header("Spin Limit (Лимит вращения шара)")]
+    [Tooltip("Не даёт шару раскручиваться быстрее, чем он реально катится на максимальной скорости. Убирает пробуксовку и рывок после отпускания клавиши")]
+    public bool limitSpinToRollingSpeed = true;
+    [Tooltip("Запас над скоростью чистого качения: 1.0 = без запаса, 1.25 = небольшая пробуксовка допустима")]
+    [Range(1f, 2f)]
+    public float rollingSpeedMargin = 1.25f;
+
+    /// <summary>Скорость платформы под шаром в его точке (ноль, если шар не на подвижной платформе).</summary>
+    public Vector3 PlatformVelocity { get; private set; }
+
+    private float ballRadius = 0.5f;
     private Rigidbody rb;
     private GroundCheck ground;
     private BallSlopeSlide slopeSlide;
@@ -131,6 +142,13 @@ public class BallController : MonoBehaviour
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         rb.maxAngularVelocity = maxAngularVelocity;
         defaultAngularDamping = rb.angularDamping;
+
+        // Радиус шара (с учётом масштаба) — нужен для лимита вращения
+        if (TryGetComponent(out SphereCollider sphere))
+        {
+            Vector3 s = transform.lossyScale;
+            ballRadius = Mathf.Max(0.01f, sphere.radius * Mathf.Max(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z)));
+        }
 
         lastMoveTime = Time.time;
     }
@@ -220,6 +238,7 @@ public class BallController : MonoBehaviour
             pVel = activePlatform.GetVelocityAtPoint(transform.position);
             pAngVel = activePlatform.GetAngularVelocity();
         }
+        PlatformVelocity = pVel;
 
         // 3. Обновляем таймер последнего движения
         if (moveInput.sqrMagnitude > 0.01f) lastMoveTime = Time.time;
@@ -460,6 +479,7 @@ public class BallController : MonoBehaviour
 
         // 5. Ограничение максимальной горизонтальной скорости
         LimitVelocity(pVel);
+        LimitSpin(pVel);
         
         // 6. Дополнительная гравитация
      
@@ -496,6 +516,25 @@ public class BallController : MonoBehaviour
         }
     }
     
+    // Угловая скорость качения (оси X/Z) не может быть выше, чем нужно для движения со скоростью
+    // «скорость платформы + maxSpeed». Вертикальная составляющая (Y) не трогается — её использует сцепление с платформой.
+    private void LimitSpin(Vector3 pVel)
+    {
+        if (!limitSpinToRollingSpeed || !ground.IsGrounded) return;
+
+        Vector3 w = rb.angularVelocity;
+        Vector3 wRoll = new Vector3(w.x, 0f, w.z);
+
+        float platformSpeed = new Vector3(pVel.x, 0f, pVel.z).magnitude;
+        float maxRollSpin = (platformSpeed + maxSpeed) / ballRadius * rollingSpeedMargin;
+
+        if (wRoll.magnitude > maxRollSpin)
+        {
+            Vector3 clamped = wRoll.normalized * maxRollSpin;
+            rb.AddTorque(clamped - wRoll, ForceMode.VelocityChange);
+        }
+    }
+
     private void ApplyExtraGravity()
     {
         if (extraGravityRise > 0f || extraGravityFall > 0f)

@@ -12,6 +12,8 @@ public class BallJump : MonoBehaviour
     [SerializeField, Range(0f, 0.5f)] private float coyoteTime = 0f;
     [SerializeField, Range(0f, 0.5f)] private float jumpBufferTime = 0.15f;
     [SerializeField, Range(0f, 2f)] private float jumpCooldown = 0.1f;
+    [Tooltip("После прыжка шар не считается заземлённым это время (сек). Без этого пару физических шагов он ещё «на земле»: сцепление с платформой тянет скорость и гасит прыжок.")]
+    [SerializeField, Range(0f, 0.3f)] private float groundLockAfterJump = 0.12f;
 
     [Header("━━━ ПОРШЕНЬ (КОЛОННА) ━━━")]
     [Tooltip("Максимальная длина выдвижения как доля от высоты прыжка.")]
@@ -35,6 +37,8 @@ public class BallJump : MonoBehaviour
     [Header("━━━ ГРАВИТАЦИЯ ━━━")]
     [SerializeField, Range(0f, 60f)] private float extraGravityRise = 12f;
     [SerializeField, Range(0f, 100f)] private float extraGravityFall = 25f;
+    [Tooltip("Выключено (рекомендуется): дополнительная гравитация действует только в воздухе. Включено — как раньше, всегда, даже когда шар стоит на платформе (давит его к платформе в ~3.5 раза сильнее).")]
+    [SerializeField] private bool applyExtraGravityOnGround = false;
 
     [Header("━━━ ОТЛАДКА ━━━")]
     [SerializeField] private bool debugLogs = false;
@@ -48,6 +52,7 @@ public class BallJump : MonoBehaviour
     private Rigidbody rb;
     private PlateController plates;
     private GroundCheck ground;
+    private BallController ballController;
     private BallInputActions input;
 
     public enum JumpState { Idle, Extending, HoldingAtPeak, Retracting }
@@ -65,6 +70,7 @@ public class BallJump : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         plates = GetComponent<PlateController>();
         ground = GetComponent<GroundCheck>();
+        ballController = GetComponent<BallController>();
         EnsureInput();
 
         if (ground == null) Debug.LogError("[BallJump] GroundCheck не найден!", this);
@@ -207,11 +213,15 @@ public class BallJump : MonoBehaviour
     {
         if (maxHorizontalSpeedAtJump > 0f)
         {
+            // Лимит считается ОТНОСИТЕЛЬНО платформы: на быстро вращающейся платформе шар не теряет её скорость при прыжке
             Vector3 v = rb.linearVelocity;
+            Vector3 platformVel = ballController != null ? ballController.PlatformVelocity : Vector3.zero;
+            Vector3 platformHoriz = new Vector3(platformVel.x, 0f, platformVel.z);
             Vector3 horiz = new Vector3(v.x, 0f, v.z);
-            if (horiz.magnitude > maxHorizontalSpeedAtJump)
+            Vector3 relative = horiz - platformHoriz;
+            if (relative.magnitude > maxHorizontalSpeedAtJump)
             {
-                Vector3 clamped = horiz.normalized * maxHorizontalSpeedAtJump;
+                Vector3 clamped = platformHoriz + relative.normalized * maxHorizontalSpeedAtJump;
                 rb.linearVelocity = new Vector3(clamped.x, v.y, clamped.z);
             }
         }
@@ -220,6 +230,7 @@ public class BallJump : MonoBehaviour
 
         plates.Configure(PistonStroke, 4f, 4f);
         rb.AddForce(Vector3.up * JumpVelocity, ForceMode.VelocityChange);
+        if (ground != null) ground.LockUnground(groundLockAfterJump);
         plates.SetExtensionDirect(0f);
 
         state = JumpState.Extending;
@@ -233,6 +244,7 @@ public class BallJump : MonoBehaviour
     private void FixedUpdate()
     {
         if (rb == null) return;
+        if (!applyExtraGravityOnGround && ground != null && ground.IsGrounded) return;
         float g = rb.linearVelocity.y > 0f ? extraGravityRise : extraGravityFall;
         rb.AddForce(Vector3.down * g, ForceMode.Acceleration);
     }
