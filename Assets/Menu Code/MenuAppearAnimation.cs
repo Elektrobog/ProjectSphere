@@ -66,7 +66,7 @@ public class MenuAppearAnimation : MonoBehaviour
     private static GameObject FindByName(string objectName, string parentName = null)
     {
         RectTransform fallback = null;
-        foreach (RectTransform rt in FindObjectsByType<RectTransform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        foreach (RectTransform rt in FindObjectsByType<RectTransform>(FindObjectsInactive.Include))
         {
             if (rt.name != objectName)
                 continue;

@@ -292,10 +292,10 @@ public class GameLoader : MonoBehaviour
         foreach (Camera cam in Camera.allCameras)
             if (cam.gameObject.scene == menuScene)
                 cam.enabled = false;
-        foreach (Light l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+        foreach (Light l in FindObjectsByType<Light>())
             if (l.gameObject.scene == menuScene)
                 l.enabled = false;
-        foreach (AudioListener al in FindObjectsByType<AudioListener>(FindObjectsSortMode.None))
+        foreach (AudioListener al in FindObjectsByType<AudioListener>())
             if (al.gameObject.scene == menuScene)
                 al.enabled = false;
     }
@@ -305,7 +305,7 @@ public class GameLoader : MonoBehaviour
         Scene menuScene = gameObject.scene;
         EventSystem menuSystem = null;
         bool levelHas = false;
-        foreach (EventSystem es in FindObjectsByType<EventSystem>(FindObjectsSortMode.None))
+        foreach (EventSystem es in FindObjectsByType<EventSystem>())
         {
             if (es.gameObject.scene == menuScene) menuSystem = es;
             else if (es.gameObject.scene == levelScene) levelHas = true;

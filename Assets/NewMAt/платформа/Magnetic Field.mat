@@ -99,9 +99,10 @@ Material:
     - _AddPrecomputedVelocity: 0
     - _AlphaClip: 0
     - _AlphaToMask: 0
-    - _BandA: 0.234
-    - _BandB: 0.772
-    - _BandWidth: 0.098
+    - _ArcSag: 0.035
+    - _BandA: 0.263
+    - _BandB: 0.739
+    - _BandWidth: 0.021
     - _Blend: 0
     - _BlendModePreserveSpecular: 1
     - _BumpScale: 1
@@ -113,16 +114,20 @@ Material:
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
     - _DstBlendAlpha: 0
+    - _EmitterBoost: 3
+    - _EmitterPinch: 0.174
     - _EnvironmentReflections: 1
-    - _Fill: 0.734
+    - _Fill: 1
     - _GlossMapScale: 1
     - _Glossiness: 0.5
     - _GlossyReflections: 1
-    - _Halo: 0.34
-    - _Intensity: 1.04
+    - _Halo: 1
+    - _Intensity: 2
+    - _LineContrast: 0.452
     - _Metallic: 0
     - _Mode: 0
     - _OcclusionStrength: 1
+    - _OneWayFlow: 0
     - _Parallax: 0.02
     - _QueueOffset: 0
     - _ReceiveShadows: 1
@@ -141,7 +146,10 @@ Material:
     m_Colors:
     - _BaseColor: {r: 0.24780047, g: 0.6499564, b: 1, a: 1}
     - _Color: {r: 0.24780044, g: 0.64995635, b: 1, a: 1}
+    - _CoreColor: {r: 0.14680658, g: 0.7035001, b: 0.98490566, a: 1}
+    - _EdgeColor: {r: 0, g: 0.08, b: 0.45, a: 1}
     - _EmissionColor: {r: 0.1, g: 0.76, b: 2, a: 2}
+    - _MidColor: {r: 0.05, g: 0.38, b: 1, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

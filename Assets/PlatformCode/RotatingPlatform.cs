@@ -58,13 +58,15 @@ public class RotatingPlatform : MonoBehaviour, IPlatformVelocityProvider
     public Vector3 GetVelocityAtPoint(Vector3 worldPoint)
     {
         if (rotationCenter == null) return Vector3.zero;
-        Vector3 radius = worldPoint - rotationCenter.position;
+        Vector3 targetPoint = keepOrientation ? transform.position : worldPoint;
+        Vector3 radius = targetPoint - rotationCenter.position;
         float omega = AngularSpeedRad * (clockwise ? -1f : 1f);
         return Vector3.Cross(rotationAxis.normalized * omega, radius);
     }
 
     public Vector3 GetAngularVelocity()
     {
+        if (keepOrientation || rotationCenter == null) return Vector3.zero;
         float omega = AngularSpeedRad * (clockwise ? -1f : 1f);
         return rotationAxis.normalized * omega;
     }

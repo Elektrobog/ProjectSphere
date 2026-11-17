@@ -15,7 +15,7 @@ public class GroundCheck : MonoBehaviour
     [SerializeField] private bool drawDebugRays = false;
 
     public bool IsGrounded { get; private set; }
-    public bool IsCenterOverGround { get; private set; } // ✅ НОВОЕ
+    public bool IsCenterOverGround { get; private set; }
     public bool JustLanded { get; private set; }
     public Vector3 GroundNormal { get; private set; }
     public float GroundAngle { get; private set; }
@@ -74,6 +74,10 @@ public class GroundCheck : MonoBehaviour
                 found = true;
             }
         }
+
+        if (drawDebugRays)
+            Debug.DrawRay(origin, Vector3.down * length, found ? Color.green : Color.red);
+
         return found;
     }
 
@@ -82,7 +86,7 @@ public class GroundCheck : MonoBehaviour
         GroundNormal = Vector3.up;
         GroundAngle = 0f;
         GroundCollider = null;
-        IsCenterOverGround = false; // Сбрасываем
+        IsCenterOverGround = false;
 
         float rayLength = checkRadius + rayLengthExtra;
         int hitCount = 0;
@@ -93,7 +97,7 @@ public class GroundCheck : MonoBehaviour
         {
             if (IsValidGround(centerHit.normal))
             {
-                IsCenterOverGround = true; // ✅ Если луч попал — центр на земле
+                IsCenterOverGround = true;
                 hitCount++;
                 averageNormal += centerHit.normal;
                 GroundCollider = centerHit.collider;
