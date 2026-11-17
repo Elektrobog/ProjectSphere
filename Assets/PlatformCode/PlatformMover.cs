@@ -1,4 +1,4 @@
-using UnityEngine;
+п»їusing UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
 public class PlatformMover : MonoBehaviour, IPlatformVelocityProvider
@@ -32,7 +32,7 @@ public class PlatformMover : MonoBehaviour, IPlatformVelocityProvider
     {
         if (pointA == null || pointB == null)
         {
-            Debug.LogError("PlatformMover: точки A и B не назначены!");
+            Debug.LogError("PlatformMover: С‚РѕС‡РєРё A Рё B РЅРµ РЅР°Р·РЅР°С‡РµРЅС‹!");
             enabled = false;
             return;
         }
