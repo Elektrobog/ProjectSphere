@@ -243,7 +243,7 @@ public class BallController : MonoBehaviour
     {
         float radius = Mathf.Max(0.01f, ballRadius);
         Vector3 targetRollingAngularVelocity =
-            Vector3.Cross(groundNormal, targetRelativeVelocity) / radius;
+            Vector3.Cross(targetRelativeVelocity, groundNormal) / radius;
 
         Vector3 targetAngularVelocity = platformAngularVelocity + targetRollingAngularVelocity;
         Vector3 angularVelocityError = targetAngularVelocity - rb.angularVelocity;
