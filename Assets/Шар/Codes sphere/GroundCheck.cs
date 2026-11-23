@@ -11,6 +11,9 @@ public class GroundCheck : MonoBehaviour
     [SerializeField] private int rayCount = 8;
     [SerializeField] private float steepAngleThreshold = 30f;
 
+    [Tooltip("Доля радиуса шара, на которой пускаются боковые лучи (0.5–0.6 не даёт шару зависать на самом краю обрыва).")]
+    [SerializeField, Range(0.2f, 0.9f)] private float perimeterRayScale = 0.55f;
+
     [Header("Отладка")]
     [SerializeField] private bool drawDebugRays = false;
 
@@ -32,7 +35,6 @@ public class GroundCheck : MonoBehaviour
 
         if (Time.time < ungroundUntil)
         {
-            // Блокировка после прыжка: пока шар ещё в пределах длины лучей, не считаем его заземлённым
             ForceUnground();
             IsCenterOverGround = false;
         }
@@ -53,8 +55,6 @@ public class GroundCheck : MonoBehaviour
         IsCenterOverGround = false;
     }
 
-    // Ближайшая поверхность под лучом. Триггеры игнорируются (FallZone, кнопки, стартовые зоны),
-    // собственные коллайдеры шара (включая дочерние пластины) — тоже.
     private bool RaycastGround(Vector3 origin, float length, out RaycastHit best)
     {
         best = default;
@@ -91,8 +91,9 @@ public class GroundCheck : MonoBehaviour
         float rayLength = checkRadius + rayLengthExtra;
         int hitCount = 0;
         Vector3 averageNormal = Vector3.zero;
+        Vector3 averageHitPoint = Vector3.zero;
 
-        // 1. Центральный луч (строго вниз)
+        // 1. Центральный луч (строго вниз под центром масс шара)
         if (RaycastGround(transform.position, rayLength, out RaycastHit centerHit))
         {
             if (IsValidGround(centerHit.normal))
@@ -100,22 +101,25 @@ public class GroundCheck : MonoBehaviour
                 IsCenterOverGround = true;
                 hitCount++;
                 averageNormal += centerHit.normal;
+                averageHitPoint += centerHit.point;
                 GroundCollider = centerHit.collider;
             }
         }
 
-        // 2. Лучи по кругу
+        // 2. Лучи по кругу (уменьшенный радиус, чтобы шар не цеплялся за пустоту)
+        float ringRadius = checkRadius * perimeterRayScale;
         for (int i = 0; i < rayCount; i++)
         {
             float angle = i * (360f / rayCount);
             Vector3 direction = Quaternion.Euler(0, angle, 0) * Vector3.forward;
-            Vector3 rayOrigin = transform.position + direction * checkRadius * 0.9f;
+            Vector3 rayOrigin = transform.position + direction * ringRadius;
             if (RaycastGround(rayOrigin, rayLength, out RaycastHit hit))
             {
                 if (IsValidGround(hit.normal))
                 {
                     hitCount++;
                     averageNormal += hit.normal;
+                    averageHitPoint += hit.point;
                     if (GroundCollider == null) GroundCollider = hit.collider;
                 }
             }
@@ -123,7 +127,20 @@ public class GroundCheck : MonoBehaviour
 
         if (hitCount > 0)
         {
-            GroundNormal = (averageNormal / hitCount).normalized;
+            Vector3 surfaceNormal = (averageNormal / hitCount).normalized;
+
+            // Если центр шара уже вышел за обрыв, смещаем нормаль в сторону падения с края
+            if (!IsCenterOverGround)
+            {
+                Vector3 meanPoint = averageHitPoint / hitCount;
+                Vector3 edgeOutDir = Vector3.ProjectOnPlane(transform.position - meanPoint, Vector3.up);
+                if (edgeOutDir.sqrMagnitude > 0.0001f)
+                {
+                    surfaceNormal = (surfaceNormal + edgeOutDir.normalized * 1.1f).normalized;
+                }
+            }
+
+            GroundNormal = surfaceNormal;
             GroundAngle = Vector3.Angle(Vector3.up, GroundNormal);
             return GroundAngle <= maxGroundAngle;
         }

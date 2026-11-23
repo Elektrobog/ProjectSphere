@@ -1,5 +1,18 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!114 &-2228776759493427626
+MonoBehaviour:
+  m_ObjectHideFlags: 11
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d0353a89b1f911e48b9e16bdc9f2e058, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Editor::UnityEditor.Rendering.Universal.AssetVersion
+  version: 10
 --- !u!21 &2100000
 Material:
   serializedVersion: 8
@@ -8,17 +21,17 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Inner Body - Dark Blue
-  m_Shader: {fileID: 4800000, guid: 933532a4fcc9baf4fa0491de14d08ed7, type: 3}
+  m_Shader: {fileID: 4800000, guid: 19e0cd814eb72284a8d3e549989bf448, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
-  m_InvalidKeywords: []
+  m_InvalidKeywords:
+  - _CUTOUT_ENABLED
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
-  m_CustomRenderQueue: -1
-  stringTagMap:
-    RenderType: Opaque
+  m_CustomRenderQueue: 3000
+  stringTagMap: {}
   disabledShaderPasses:
   - MOTIONVECTORS
   m_LockedProperties: 
@@ -86,6 +99,7 @@ Material:
     - _AddPrecomputedVelocity: 0
     - _AlphaClip: 0
     - _AlphaToMask: 0
+    - _BackFaceDim: 0.55
     - _Blend: 0
     - _BlendModePreserveSpecular: 1
     - _BumpScale: 1
@@ -93,20 +107,29 @@ Material:
     - _ClearCoatSmoothness: 0
     - _Cull: 2
     - _Cutoff: 0.5
+    - _CutoutEnabled: 1
+    - _CutoutFeather: 0.45
+    - _CutoutOpacity: 0.12
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
     - _DstBlendAlpha: 0
     - _EnvironmentReflections: 1
+    - _FadedAlpha: 0.22
+    - _FresnelPower: 2.8
     - _GlossMapScale: 1
     - _Glossiness: 0.44999996
     - _GlossyReflections: 1
+    - _InsideDarken: 0.35
     - _Metallic: 0
     - _Mode: 0
+    - _NearCamRadius: 0.9
     - _OcclusionStrength: 1
     - _Parallax: 0.02
     - _QueueOffset: 0
+    - _ReceiveCutout: 1
     - _ReceiveShadows: 1
+    - _RimGlowWidth: 0.08
     - _Smoothness: 0.44999996
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
@@ -118,22 +141,11 @@ Material:
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
     m_Colors:
-    - _BaseColor: {r: 0.17184407, g: 0.23479503, b: 0.293372, a: 1}
-    - _Color: {r: 0.17184404, g: 0.234795, b: 0.29337198, a: 1}
+    - _BaseColor: {r: 0.15170369, g: 0.18974826, b: 0.24780047, a: 1}
+    - _Color: {r: 0.15170366, g: 0.18974823, b: 0.24780044, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 0}
+    - _FresnelRimColor: {r: 0.12, g: 0.75, b: 1, a: 1}
+    - _RimGlowColor: {r: 0.12, g: 0.75, b: 1, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
---- !u!114 &7475145295607206807
-MonoBehaviour:
-  m_ObjectHideFlags: 11
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d0353a89b1f911e48b9e16bdc9f2e058, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Editor::UnityEditor.Rendering.Universal.AssetVersion
-  version: 10

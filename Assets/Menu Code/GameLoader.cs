@@ -7,10 +7,9 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Загрузчик уровня в стиле хороших игр: меню плавно растворяется,
-/// появляется экран загрузки, уровень грузится аддитивно, шейдеры прогреваются
-/// ДО активации, сцена активируется под экраном загрузки с замороженным временем,
-/// и только когда всё прогрето, игрок плавно попадает в уровень без фризов.
+/// Загрузчик уровня: плавно ведёт полосу прогресса через все реальные этапы
+/// (загрузка сцены -> прогрев шейдеров -> активация -> пост-прогрев)
+/// и открывает уровень только после честного достижения 100%.
 /// </summary>
 public class GameLoader : MonoBehaviour
 {
@@ -28,10 +27,10 @@ public class GameLoader : MonoBehaviour
     public string targetScene = "Level 1";
     [Tooltip("Минимальное время показа экрана загрузки")]
     public float minLoadTime = 2f;
-    [Tooltip("Пауза после активации уровня: физика, GC, первые кадр")]
+    [Tooltip("Пауза после активации уровня: физика, GC, первые кадры")]
     public float postActivationWarmupTime = 0.6f;
     [Tooltip("Максимальная скорость полосы прогресса (0..1 в секунду)")]
-    public float maxProgressFillSpeed = 0.7f;
+    [Min(0.1f)] public float maxProgressFillSpeed = 0.75f;
 
     [Header("Прогрев шейдеров")]
     [Tooltip("Коллекция вариантов шейдеров для прогрева")]
@@ -78,7 +77,7 @@ public class GameLoader : MonoBehaviour
             startButton.onClick.AddListener(StartGameLoading);
     }
 
-    /// Запуск загрузки (можно повесить на кнопку Start).
+    /// <summary>Запуск загрузки (можно повесить на кнопку Start).</summary>
     public void StartGameLoading()
     {
         if (_isLoading)
@@ -89,6 +88,7 @@ public class GameLoader : MonoBehaviour
     private IEnumerator LoadLevelFlow()
     {
         _isLoading = true;
+        SetProgress(0f, true);
 
         // --- Фаза 0: плавный переход меню -> экран загрузки ---
         if (loadingPanel != null)
@@ -109,7 +109,6 @@ public class GameLoader : MonoBehaviour
             yield return null;
         }
 
-        // прячем всё меню, кроме экрана загрузки
         if (mainMenuPanel != null)
             mainMenuPanel.SetActive(false);
         HideOtherCanvasChildren();
@@ -117,11 +116,10 @@ public class GameLoader : MonoBehaviour
             _loadingGroup.alpha = 1f;
 
         SetStatus("Подготавливаем уровень...");
-        SetProgress(0f, true);
         _tipIndex = -1;
         _tipTimer = TipInterval;
 
-        // --- Фаза 1: асинхронная загрузка сцены до 90% ---
+        // --- Фаза 1 (0% -> 45%): асинхронная загрузка данных сцены ---
         _loadOp = SceneManager.LoadSceneAsync(targetScene, LoadSceneMode.Additive);
         if (_loadOp == null)
         {
@@ -134,23 +132,30 @@ public class GameLoader : MonoBehaviour
         float startTime = Time.unscaledTime;
         while (_loadOp.progress < 0.9f)
         {
-            SetProgress(Mathf.Clamp01(_loadOp.progress / 0.9f));
+            float phaseTarget = Mathf.Clamp01(_loadOp.progress / 0.9f) * 0.45f;
+            SetProgress(phaseTarget);
             UpdateTips();
             yield return null;
         }
-        SetProgress(1f, true);
-        SetStatus("Ещё немного...");
 
-        // не прячем экран быстрее minLoadTime
-        while (Time.unscaledTime - startTime < minLoadTime)
+        // Даём полосе плавно дойти до отметки 45% перед началом прогрева графики
+        while (_displayProgress < 0.45f)
         {
+            SetProgress(0.45f);
             UpdateTips();
             yield return null;
         }
 
-        // --- Фаза 2: прогрев шейдеров ДО активации сцены ---
+        // --- Фаза 2 (45% -> 65%): прогрев шейдеров ДО активации сцены ---
         SetStatus("Подготавливаем графику...");
+        while (_displayProgress < 0.55f)
+        {
+            SetProgress(0.55f);
+            UpdateTips();
+            yield return null;
+        }
         yield return null;
+
         if (shaderWarmupCollection != null)
         {
             shaderWarmupCollection.WarmUp();
@@ -159,45 +164,75 @@ public class GameLoader : MonoBehaviour
         {
             Shader.WarmupAllShaders();
         }
-        yield return null;
 
-        // --- Фаза 3: активация уровня под замороженным временем ---
+        while (_displayProgress < 0.65f)
+        {
+            SetProgress(0.65f);
+            UpdateTips();
+            yield return null;
+        }
+
+        // --- Фаза 3 (65% -> 85%): активация уровня под замороженным временем ---
+        SetStatus("Запускаем уровень...");
         if (freezeGameTimeDuringWarmup)
             Time.timeScale = 0f;
+
         _loadOp.allowSceneActivation = true;
         while (!_loadOp.isDone)
+        {
+            SetProgress(0.80f);
+            UpdateTips();
             yield return null;
+        }
 
         Scene levelScene = SceneManager.GetSceneByName(targetScene);
         if (levelScene.IsValid())
             SceneManager.SetActiveScene(levelScene);
 
-        // гасим камеру, свет и звук меню, чтобы не мешали уровню
         MuteMenuScene();
 
-        // --- Фаза 4: пост-активационный прогрев ---
+        // --- Фаза 4 (85% -> 99%): пост-активационный прогрев и очистка памяти ---
+        SetStatus("Финальная настройка...");
         Physics.SyncTransforms();
+
         if (unloadUnusedAssetsDuringLoad)
         {
             AsyncOperation unload = Resources.UnloadUnusedAssets();
             while (unload != null && !unload.isDone)
+            {
+                SetProgress(0.92f);
+                UpdateTips();
                 yield return null;
+            }
             GC.Collect();
         }
-        float warmupEnd = Time.unscaledTime + postActivationWarmupTime;
-        while (Time.unscaledTime < warmupEnd)
-            yield return null;
 
-        // --- Фаза 5: показываем только полностью подготовленный уровень ---
-        // Даём сцене отрисоваться под непрозрачным экраном загрузки.
-        // Это позволяет Canvas, HUD и объектам сцены завершить первый кадр инициализации.
+        float warmupEnd = Time.unscaledTime + postActivationWarmupTime;
+        while (Time.unscaledTime < warmupEnd || (Time.unscaledTime - startTime) < minLoadTime)
+        {
+            float timeRatio = minLoadTime > 0.01f
+                ? Mathf.Clamp01((Time.unscaledTime - startTime) / minLoadTime)
+                : 1f;
+            float target = Mathf.Lerp(0.85f, 0.99f, timeRatio);
+            SetProgress(target);
+            UpdateTips();
+            yield return null;
+        }
+
+        // --- Фаза 5 (99% -> 100%): плавно доводим полосу до 100% перед открытием сцены ---
+        SetStatus("Готово!");
+        while (_displayProgress < 0.999f)
+        {
+            SetProgress(1f);
+            yield return null;
+        }
+        SetProgress(1f, true);
+
         EnsureLevelEventSystem(levelScene);
         yield return new WaitForEndOfFrame();
         yield return null;
         yield return new WaitForEndOfFrame();
 
-        // Скрываем экран и размораживаем время в одном кадре:
-        // игрок не увидит промежуточное состояние с появившимся HUD и остановленным миром.
         if (loadingPanel != null)
             loadingPanel.SetActive(false);
         Time.timeScale = 1f;
@@ -205,16 +240,21 @@ public class GameLoader : MonoBehaviour
         Debug.Log("[GameLoader] Уровень '" + targetScene + "' загружен и прогрет за " +
                   (Time.unscaledTime - startTime).ToString("F2") + " с");
 
-        // выгружаем сцену меню (вместе с этим объектом)
         SceneManager.UnloadSceneAsync(gameObject.scene);
     }
 
     private void SetProgress(float target, bool instant = false)
     {
+        target = Mathf.Clamp01(target);
         if (instant)
+        {
             _displayProgress = target;
+        }
         else
-            _displayProgress = Mathf.MoveTowards(_displayProgress, target, maxProgressFillSpeed * Time.unscaledDeltaTime);
+        {
+            float speed = Mathf.Max(0.1f, maxProgressFillSpeed);
+            _displayProgress = Mathf.MoveTowards(_displayProgress, target, speed * Time.unscaledDeltaTime);
+        }
         ApplyProgress(_displayProgress);
     }
 
@@ -225,10 +265,12 @@ public class GameLoader : MonoBehaviour
             progressFillRect.sizeDelta = new Vector2(Mathf.Lerp(0f, maxProgressBarWidth, v), progressFillRect.sizeDelta.y);
         else if (progressFill != null)
             progressFill.fillAmount = v;
+
         if (progressFill != null)
             progressFill.color = v < 0.5f
                 ? Color.Lerp(startColor, middleColor, v * 2f)
                 : Color.Lerp(middleColor, endColor, (v - 0.5f) * 2f);
+
         if (percentageText != null)
             percentageText.text = Mathf.RoundToInt(v * 100f) + "%";
     }
@@ -262,7 +304,6 @@ public class GameLoader : MonoBehaviour
         if (canvas == null)
             return;
 
-        // Экран загрузки должен перекрывать HUD новой сцены.
         canvas.overrideSorting = true;
         canvas.sortingOrder = short.MaxValue;
     }

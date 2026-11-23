@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-[RequireComponent(typeof(Rigidbody), typeof(GroundCheck), typeof(BallSlopeSlide))]
+[RequireComponent(typeof(Rigidbody), typeof(GroundCheck))]
 public class BallController : MonoBehaviour
 {
     [Header("References")]
@@ -56,7 +56,6 @@ public class BallController : MonoBehaviour
 
     private Rigidbody rb;
     private GroundCheck ground;
-    private BallSlopeSlide slopeSlide;
     private BallInputActions inputActions;
 
     private Vector2 moveInput;
@@ -79,7 +78,6 @@ public class BallController : MonoBehaviour
     {
         rb = GetComponent<Rigidbody>();
         ground = GetComponent<GroundCheck>();
-        slopeSlide = GetComponent<BallSlopeSlide>();
         inputActions = new BallInputActions();
 
         rb.interpolation = RigidbodyInterpolation.Interpolate;
@@ -190,10 +188,6 @@ public class BallController : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Переносит относительную скорость и вращение шара в обновлённую систему координат платформы,
-    /// чтобы при разгоне или вращении платформы шар не сносило с неё во время качения.
-    /// </summary>
     private void CarryWithPlatformFrame(Vector3 platformVelocity, Vector3 platformAngularVelocity)
     {
         if (!hasPrevPlatformFrame)
@@ -277,7 +271,10 @@ public class BallController : MonoBehaviour
         Vector3 relativeVelocity = Vector3.ProjectOnPlane(rb.linearVelocity - platformVelocity, normal);
         Vector3 relativeSpin = rb.angularVelocity - platformAngularVelocity;
 
-        if (hasInput || ground.IsSteepSlope() || activePlatform == null)
+        // Если шар уже свесился центром за край платформы (!IsCenterOverGround), якорь не держит его от падения
+        bool safelyOnSurface = ground.IsCenterOverGround && !ground.IsSteepSlope();
+
+        if (hasInput || !safelyOnSurface || activePlatform == null)
         {
             ReleaseAnchor();
         }
@@ -289,7 +286,7 @@ public class BallController : MonoBehaviour
 
         Vector3 angularAcceleration;
 
-        if (isBraking)
+        if (isBraking && safelyOnSurface)
         {
             float speed = relativeVelocity.magnitude;
             float spinSpeed = relativeSpin.magnitude * radius;
@@ -332,13 +329,10 @@ public class BallController : MonoBehaviour
                 lateralCorrection = Vector3.ClampMagnitude(lateralCorrection, reverseAcceleration * toAngular);
             }
 
-            float slopeFactor = slopeSlide != null ? slopeSlide.SlopeControlFactor : 1f;
-            angularAcceleration = (drive + lateralCorrection) * slopeFactor;
+            angularAcceleration = drive + lateralCorrection;
         }
-        else if (activePlatform != null)
+        else if (activePlatform != null && safelyOnSurface)
         {
-            // На платформе: плавный выбег в системе координат платформы с синхронизацией вращения,
-            // чтобы шар естественно докатывался и останавливался до края платформы.
             Vector3 normalVel = Vector3.Project(rb.linearVelocity, normal);
             Vector3 platformPlanarVel = Vector3.ProjectOnPlane(platformVelocity, normal);
 
@@ -358,9 +352,8 @@ public class BallController : MonoBehaviour
             );
             return;
         }
-        else
+        else if (safelyOnSurface)
         {
-            // На обычной неподвижной поверхности: свободный выбег с бесшовной доводкой до нуля без отката назад
             float speed = relativeVelocity.magnitude;
             float spinSpeed = relativeSpin.magnitude * radius;
             float maxCurrentSpeed = Mathf.Max(speed, spinSpeed);
@@ -391,6 +384,10 @@ public class BallController : MonoBehaviour
 
             float absFactor = GetBrakingTraction(relativeVelocity, relativeSpin, normal, radius);
             angularAcceleration = -relativeSpin * (rollingResistance * absFactor);
+        }
+        else
+        {
+            return;
         }
 
         rb.AddTorque(angularAcceleration, ForceMode.Acceleration);
@@ -423,11 +420,6 @@ public class BallController : MonoBehaviour
         holdBlend = holdEngageTime > 0.001f
             ? Mathf.MoveTowards(holdBlend, 1f, Time.fixedDeltaTime / holdEngageTime)
             : 1f;
-
-        // Пока относительная скорость гасится до нуля, смещаем якорь вместе с шаром,
-        // чтобы после остановки его не тянуло назад в точку начала торможения.
-        if (holdBlend < 1f)
-            anchorLocalPos = activePlatformTransform.InverseTransformPoint(rb.position);
 
         Vector3 targetWorldPos = activePlatformTransform.TransformPoint(anchorLocalPos);
         Vector3 planarError = Vector3.ProjectOnPlane(targetWorldPos - rb.position, normal);
@@ -480,8 +472,7 @@ public class BallController : MonoBehaviour
         if (inputDirection.sqrMagnitude < InputDeadZone * InputDeadZone)
             return;
 
-        float slopeFactor = slopeSlide != null ? slopeSlide.SlopeControlFactor : 1f;
-        rb.AddForce(inputDirection * airControlForce * airControlFactor * slopeFactor,
+        rb.AddForce(inputDirection * airControlForce * airControlFactor,
             ForceMode.Acceleration);
     }
 }
