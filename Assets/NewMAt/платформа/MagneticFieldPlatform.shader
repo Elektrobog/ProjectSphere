@@ -42,6 +42,7 @@ Shader "SciFi/MagneticFieldPlatform"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            #pragma multi_compile_instancing
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             struct Attributes
@@ -50,6 +51,7 @@ Shader "SciFi/MagneticFieldPlatform"
                 float3 normalOS   : NORMAL;
                 float2 uv0        : TEXCOORD0; // x: 0 (у труб колонны) -> 1 (у платформы), y: 0..1 по ширине дуги
                 float4 uv1        : TEXCOORD1; // x: тип слоя (0 = мост, 1 = дуга захвата, 2 = вуаль), y: индекс слоя -1..1
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct Varyings
@@ -128,6 +130,7 @@ Shader "SciFi/MagneticFieldPlatform"
             Varyings vert(Attributes input)
             {
                 Varyings output;
+                UNITY_SETUP_INSTANCE_ID(input);
                 VertexPositionInputs posInputs = GetVertexPositionInputs(input.positionOS.xyz);
                 VertexNormalInputs normInputs = GetVertexNormalInputs(input.normalOS);
 

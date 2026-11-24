@@ -579,12 +579,18 @@ public class MagneticPlatformSpawner : MonoBehaviour
 
         if (!columnCollider) return;
 
+        // Отключаем тяжёлые MeshCollider на визуальных деталях колонны, если они там есть
+        Transform platformsCont = transform.Find(ContainerName);
+        foreach (MeshCollider extraMc in colRoot.GetComponentsInChildren<MeshCollider>(true))
+        {
+            if (extraMc.transform.name == ColumnColliderName) continue;
+            if (platformsCont != null && extraMc.transform.IsChildOf(platformsCont)) continue;
+            extraMc.enabled = false;
+        }
+
         float totalHeight = Mathf.Max(0.2f, rows * rowHeight + columnHeightPadding * 2f);
         float centerY = ringY0Local + (rows * rowHeight) * 0.5f;
         float r = Mathf.Max(0.1f, columnRadius);
-        int segs = Mathf.Clamp(columnColliderSegments, 12, 128);
-
-        Mesh cylMesh = BuildCylinderColliderMesh(r, totalHeight, segs);
 
         var go = new GameObject(ColumnColliderName);
         go.hideFlags = HideFlags.DontSave;
@@ -592,14 +598,13 @@ public class MagneticPlatformSpawner : MonoBehaviour
         go.transform.localPosition = new Vector3(0f, centerY, 0f);
         go.transform.localRotation = Quaternion.identity;
 
-        var mc = go.AddComponent<MeshCollider>();
-        mc.convex = false;
-        mc.cookingOptions = MeshColliderCookingOptions.CookForFasterSimulation
-                          | MeshColliderCookingOptions.EnableMeshCleaning
-                          | MeshColliderCookingOptions.WeldColocatedVertices;
-        mc.sharedMesh = cylMesh;
+        // CapsuleCollider с запасом высоты на радиус даёт идеально гладкий цилиндр без полигонов
+        var cc = go.AddComponent<CapsuleCollider>();
+        cc.direction = 1; // Ось Y
+        cc.radius = r;
+        cc.height = totalHeight + r * 2f;
         if (physicMaterial != null)
-            mc.sharedMaterial = physicMaterial;
+            cc.sharedMaterial = physicMaterial;
     }
 
     public void RemoveColumnCollider()
@@ -912,11 +917,20 @@ public class MagneticPlatformSpawner : MonoBehaviour
         Transform colCol = colRoot.Find(ColumnColliderName);
         if (colCol != null)
         {
-            var colMc = colCol.GetComponent<MeshCollider>();
-            if (colMc != null && colMc.sharedMesh != null)
+            Gizmos.color = new Color(0.2f, 0.95f, 0.45f, 0.55f);
+            var cap = colCol.GetComponent<CapsuleCollider>();
+            if (cap != null)
             {
-                Gizmos.color = new Color(0.2f, 0.95f, 0.45f, 0.55f);
-                Gizmos.DrawWireMesh(colMc.sharedMesh, colCol.position, colCol.rotation, colCol.lossyScale);
+                float r = cap.radius * Mathf.Max(colCol.lossyScale.x, colCol.lossyScale.z);
+                float cylHalfH = Mathf.Max(0f, (cap.height - cap.radius * 2f) * 0.5f * colCol.lossyScale.y);
+                DrawWireCircleXZ(colCol.position + Vector3.up * cylHalfH, r, 32);
+                DrawWireCircleXZ(colCol.position - Vector3.up * cylHalfH, r, 32);
+            }
+            else
+            {
+                var colMc = colCol.GetComponent<MeshCollider>();
+                if (colMc != null && colMc.sharedMesh != null)
+                    Gizmos.DrawWireMesh(colMc.sharedMesh, colCol.position, colCol.rotation, colCol.lossyScale);
             }
         }
 
@@ -925,6 +939,18 @@ public class MagneticPlatformSpawner : MonoBehaviour
 
         foreach (MagneticPlatform mp in cont.GetComponentsInChildren<MagneticPlatform>())
             mp.DrawHitboxGizmo();
+    }
+
+    static void DrawWireCircleXZ(Vector3 center, float radius, int segments)
+    {
+        Vector3 prev = center + new Vector3(radius, 0f, 0f);
+        for (int i = 1; i <= segments; i++)
+        {
+            float ang = (i / (float)segments) * Mathf.PI * 2f;
+            Vector3 next = center + new Vector3(Mathf.Cos(ang) * radius, 0f, Mathf.Sin(ang) * radius);
+            Gizmos.DrawLine(prev, next);
+            prev = next;
+        }
     }
 
     void OnDrawGizmosSelected()
