@@ -37,7 +37,7 @@ public class CameraObstacleFade : MonoBehaviour
 
     private MaterialPropertyBlock mpb;
     private float nextScanTime;
-    private readonly RaycastHit[] hitBuffer = new RaycastHit[16];
+    private readonly RaycastHit[] hitBuffer = new RaycastHit[32];
     private readonly Collider[] overlapBuffer = new Collider[16];
 
     private class FadedGroup
@@ -79,14 +79,12 @@ public class CameraObstacleFade : MonoBehaviour
         Vector3 targetPos = playerTarget.position + targetOffset;
         Shader.SetGlobalVector(CamCutoutOriginId, new Vector4(camPos.x, camPos.y, camPos.z, 1f));
 
-        // Физические запросы выполняются с ограниченной частотой.
-        // Обновление плавности ниже остаётся покадровым.
         if (now >= nextScanTime)
         {
             nextScanTime = now + Mathf.Max(0.01f, scanInterval);
 
-            // 1. Проверка камеры вплотную к объекту
-            int overlaps = Physics.OverlapSphereNonAlloc(camPos, 0.25f, overlapBuffer, fadeLayers, QueryTriggerInteraction.Ignore);
+            // 1. Проверка зоны вокруг самой камеры без слепой зоны
+            int overlaps = Physics.OverlapSphereNonAlloc(camPos, checkRadius, overlapBuffer, fadeLayers, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < overlaps; i++)
             {
                 MarkColliderBlocked(overlapBuffer[i], now);
@@ -144,9 +142,19 @@ public class CameraObstacleFade : MonoBehaviour
 
             if (!rootCache.TryGetValue(groupRoot, out group))
             {
+                Renderer[] allRenderers = groupRoot.GetComponentsInChildren<Renderer>(true);
+                var fadeable = new List<Renderer>(allRenderers.Length);
+
+                for (int i = 0; i < allRenderers.Length; i++)
+                {
+                    Renderer r = allRenderers[i];
+                    if (r != null && r.sharedMaterial != null && r.sharedMaterial.HasProperty(ObjectFadeAmountId))
+                        fadeable.Add(r);
+                }
+
                 group = new FadedGroup
                 {
-                    renderers = groupRoot.GetComponentsInChildren<Renderer>(true),
+                    renderers = fadeable.ToArray(),
                     currentFade = 0f,
                     lastAppliedFade = -1f
                 };
@@ -154,6 +162,9 @@ public class CameraObstacleFade : MonoBehaviour
             }
             colliderCache[col] = group;
         }
+
+        if (group.renderers == null || group.renderers.Length == 0)
+            return;
 
         group.lastBlockedTime = now;
         if (!group.isActive)
@@ -169,17 +180,27 @@ public class CameraObstacleFade : MonoBehaviour
         if (platform is Component comp)
             return comp.transform;
 
-        if (t.parent != null && t.parent.GetComponentsInChildren<Renderer>(true).Length > 1)
+        Transform current = t;
+
+        // Если коллайдер висит на отдельном дочернем объекте без своих Renderer (например, ~gen_ColumnCollider),
+        // поднимаемся до родителя, которому принадлежат визуальные меши объекта.
+        while (current.parent != null && current.GetComponentInChildren<Renderer>(true) == null)
         {
-            Transform current = t;
-            while (current.parent != null && ((1 << current.parent.gameObject.layer) & fadeLayers.value) != 0)
-            {
-                current = current.parent;
-            }
-            return current;
+            current = current.parent;
         }
 
-        return t;
+        // Поднимаемся выше только пока родитель является частью той же составной модели (имеет Renderer или LODGroup),
+        // не захватывая корневые папки-контейнеры сцены.
+        while (current.parent != null && ((1 << current.parent.gameObject.layer) & fadeLayers.value) != 0)
+        {
+            Transform parent = current.parent;
+            if (parent.GetComponent<Renderer>() == null && parent.GetComponent<LODGroup>() == null)
+                break;
+
+            current = parent;
+        }
+
+        return current;
     }
 
     private void ApplyFadeToRenderers(FadedGroup group, float fadeAmount)
@@ -188,12 +209,14 @@ public class CameraObstacleFade : MonoBehaviour
         Renderer[] renderers = group.renderers;
         if (renderers == null) return;
 
-        mpb.SetFloat(ObjectFadeAmountId, fadeAmount);
         for (int i = 0; i < renderers.Length; i++)
         {
             Renderer r = renderers[i];
-            if (r != null)
-                r.SetPropertyBlock(mpb);
+            if (r == null) continue;
+
+            r.GetPropertyBlock(mpb);
+            mpb.SetFloat(ObjectFadeAmountId, fadeAmount);
+            r.SetPropertyBlock(mpb);
         }
     }
 }

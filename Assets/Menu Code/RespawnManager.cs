@@ -4,20 +4,18 @@ public class RespawnManager : MonoBehaviour
 {
     public static RespawnManager Instance { get; private set; }
 
-    [Header("Ссылки")]
-    [Tooltip("Объект шара (если оставить пустым — найдётся автоматически по тегу Ball).")]
-    public Transform ball;
+    [Header("Игрок")]
+    [Tooltip("Ссылка на объект шара (если оставить пустым — найдётся автоматически по BallController).")]
+    public Transform player;
 
-    [Tooltip("Стартовая или текущая контрольная точка (если пусто — запомнится начальная позиция шара).")]
-    public Transform currentCheckpoint;
+    private Vector3 startPosition;
+    private Quaternion startRotation;
 
-    [Header("Настройки")]
-    public string ballTag = "Ball";
+    private Vector3 checkpointPosition;
+    private Quaternion checkpointRotation;
 
-    private Vector3 _savedPosition;
-    private Quaternion _savedRotation;
-    private bool _hasSavedPoint;
-    private Rigidbody _ballRb;
+    /// <summary>True, если игрок реально активировал хотя бы один CheckpointTrigger.</summary>
+    public bool HasCheckpoint { get; private set; }
 
     private void Awake()
     {
@@ -26,89 +24,79 @@ public class RespawnManager : MonoBehaviour
             Destroy(gameObject);
             return;
         }
+
         Instance = this;
+        HasCheckpoint = false;
     }
 
     private void Start()
     {
-        ResolveBall();
+        ResolvePlayer();
 
-        if (currentCheckpoint != null)
+        if (player != null)
         {
-            SetCheckpoint(currentCheckpoint);
+            startPosition = player.position;
+            startRotation = player.rotation;
         }
-        else if (ball != null)
-        {
-            _savedPosition = ball.position;
-            _savedRotation = ball.rotation;
-            _hasSavedPoint = true;
-        }
+
+        // Гарантированный сброс на старте уровня, чтобы исключить телепорт вперёд
+        HasCheckpoint = false;
     }
 
-    private void ResolveBall()
+    private void ResolvePlayer()
     {
-        if (ball == null && !string.IsNullOrEmpty(ballTag))
-        {
-            GameObject found = GameObject.FindGameObjectWithTag(ballTag);
-            if (found != null)
-                ball = found.transform;
-        }
+        if (player != null)
+            return;
 
-        if (ball != null && _ballRb == null)
-            _ballRb = ball.GetComponent<Rigidbody>();
-    }
-
-    /// <summary>Сохранить новую контрольную точку (вызывается триггерами чекпоинтов).</summary>
-    public void SetCheckpoint(Transform checkpoint)
-    {
-        if (checkpoint == null) return;
-        currentCheckpoint = checkpoint;
-        _savedPosition = checkpoint.position;
-        _savedRotation = checkpoint.rotation;
-        _hasSavedPoint = true;
-    }
-
-    /// <summary>Вернуть шар на последнюю сохранённую контрольную точку.</summary>
-    public void Respawn(GameObject targetBall = null)
-    {
-        if (targetBall != null)
+        BallController ball = FindAnyObjectByType<BallController>(FindObjectsInactive.Include);
+        if (ball != null)
         {
-            ball = targetBall.transform;
-            _ballRb = targetBall.GetComponent<Rigidbody>();
-        }
-        else
-        {
-            ResolveBall();
-        }
-
-        if (ball == null)
-        {
-            Debug.LogWarning("[RespawnManager] Не найден объект шара для возрождения!", this);
+            player = ball.transform;
             return;
         }
 
-        if (currentCheckpoint != null)
-        {
-            _savedPosition = currentCheckpoint.position;
-            _savedRotation = currentCheckpoint.rotation;
-            _hasSavedPoint = true;
-        }
+        GameObject taggedBall = GameObject.FindGameObjectWithTag("Ball");
+        if (taggedBall != null)
+            player = taggedBall.transform;
+    }
 
-        if (!_hasSavedPoint)
+    /// <summary>Этот метод вызывает ваш CheckpointTrigger.cs (передавая spawnPoint).</summary>
+    public void SetCheckpoint(Transform checkpointTransform)
+    {
+        if (checkpointTransform == null)
+            return;
+
+        checkpointPosition = checkpointTransform.position;
+        checkpointRotation = checkpointTransform.rotation;
+        HasCheckpoint = true;
+    }
+
+    public void ClearCheckpoints()
+    {
+        HasCheckpoint = false;
+    }
+
+    public void Respawn()
+    {
+        ResolvePlayer();
+        if (player == null)
         {
-            Debug.LogWarning("[RespawnManager] Не задана контрольная точка возрождения!", this);
+            Debug.LogError("[RespawnManager] Не найден объект шара для возрождения!", this);
             return;
         }
 
-        if (_ballRb != null)
+        Vector3 targetPos = HasCheckpoint ? checkpointPosition : startPosition;
+        Quaternion targetRot = HasCheckpoint ? checkpointRotation : startRotation;
+
+        if (player.TryGetComponent(out Rigidbody rb))
         {
-            _ballRb.linearVelocity = Vector3.zero;
-            _ballRb.angularVelocity = Vector3.zero;
-            _ballRb.position = _savedPosition;
-            _ballRb.rotation = _savedRotation;
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.position = targetPos;
+            rb.rotation = targetRot;
         }
 
-        ball.SetPositionAndRotation(_savedPosition, _savedRotation);
+        player.SetPositionAndRotation(targetPos, targetRot);
         Physics.SyncTransforms();
     }
 }

@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -7,73 +6,55 @@ public class OrbitCamera : MonoBehaviour
     [Header("Цель и дистанция")]
     public Transform target;
     public float distance = 5f;
-    public float minDistance = 1.2f;
+    public float minDistance = 1.0f;
     public float heightOffset = 2f;
 
-    [Header("Чувствительность (шкала 0.1 – 10, норма = 5)")]
-    [Tooltip("Чувствительность по горизонтали в пользовательской шкале (5 = стандарт).")]
+    [Header("Защита от влетания в шар")]
+    [Tooltip("Радиус шара (определяется автоматически по SphereCollider, если он есть).")]
+    public float ballRadius = 0.5f;
+    [Tooltip("Минимальный зазор от поверхности шара до ближней плоскости камеры (м).")]
+    [Min(0.05f)] public float minBallClearance = 0.35f;
+    [Tooltip("Максимальное отставание плавного слежения от реального центра шара (м).")]
+    [Min(0.05f)] public float maxPivotLag = 0.35f;
+
+    [Header("Чувствительность")]
     [Range(0.1f, 10f)] public float xSpeed = 5f;
-
-    [Tooltip("Чувствительность по вертикали в пользовательской шкале (5 = стандарт).")]
     [Range(0.1f, 10f)] public float ySpeed = 5f;
-
-    [Tooltip("Инвертировать вертикальную ось (ось Y).")]
     public bool invertY = false;
 
     public float yMinLimit = -20f;
     public float yMaxLimit = 80f;
 
-    [Header("Калибровка базовой скорости")]
-    [Tooltip("Градусов на 1 пиксель движения мыши при сенсе = 1. При 0.035 значение сенсы 5 будет комфортным.")]
+    [Header("Скорость")]
     public float mouseBaseScale = 0.035f;
-
-    [Tooltip("Скорость поворота (°/сек) для стика геймпада при сенсе = 1.")]
     public float gamepadBaseSpeed = 35f;
 
-    [Header("Плавность камеры")]
-    [Tooltip("Плавность поворота камеры (0 = мгновенно, 0.04–0.07 = мягко без рывков).")]
+    [Header("Плавность")]
     [Range(0f, 0.25f)] public float rotationSmoothTime = 0.045f;
-
-    [Tooltip("Плавность следования за позицией шара (0.03–0.06 убирает микро-ступеньки физики).")]
     [Range(0f, 0.25f)] public float followSmoothTime = 0.04f;
-
-    [Tooltip("Плавность изменения дистанции при обходе препятствий.")]
+    [Tooltip("Плавность отдаления камеры после выхода из-за стены (приближение к стене всегда мгновенное).")]
     [Range(0f, 0.3f)] public float distanceSmoothTime = 0.08f;
 
-    [Header("Слои коллизий")]
-    [Tooltip("Слои, сквозь которые камера ВООБЩЕ не может летать (пол и внешние стены).")]
+    [Header("Коллизии со стенами и прозрачными объектами")]
+    [Tooltip("Слои твёрдых стен и пола, сквозь которые камера и края экрана не должны проходить (HardWall).")]
     public LayerMask hardWallLayers;
-
-    [Tooltip("Слои объектов перекрытия (колонна, платформы).")]
+    [Tooltip("Слои колонн и платформ, за которые камера может заходить, делая их прозрачными (FadeObstacle).")]
     public LayerMask cutoutObjectLayers;
-
-    public float collisionBuffer = 0.25f;
-    public float sphereRadius = 0.35f;
-
-    [Header("Поведение у объектов перекрытия")]
-    [Tooltip("Насколько близко камера может подлетать к поверхности объекта (в метрах).")]
-    [Min(0.05f)] public float minObjectProximity = 0.6f;
-
-    [Tooltip("Разрешить камере уходить ЗА объект, если позади есть место.")]
+    [Tooltip("Разрешить камере проходить за объекты из Cutout Object Layers.")]
     public bool allowPassBehindObject = true;
 
-    [Tooltip("Насколько дальше distance камера может уйти, чтобы оказаться ЗА толстым объектом.")]
-    [Min(0f)] public float behindObjectExtraDistance = 6f;
+    [Header("Защита краёв экрана")]
+    [Tooltip("Отступ от стен для ближней плоскости камеры (м).")]
+    [Min(0.05f)] public float collisionBuffer = 0.22f;
+    [Tooltip("Минимальный радиус сферы проверки камеры (м).")]
+    [Min(0.1f)] public float sphereRadius = 0.35f;
+    [Tooltip("Автоматически уменьшает Near Clip Plane камеры, чтобы края экрана не цепляли стены и шар.")]
+    public bool autoAdjustNearClip = true;
+    [Min(0.03f)] public float preferredNearClip = 0.1f;
 
-    [Tooltip("Мгновенный перенос через объект без плавного пролёта.")]
-    public bool instantPassThrough = false;
-
-    private const int MaxCrossings = 16;
-    private const float NoEnd = 1e9f;
-
+    private Camera cam;
     private BallInputActions inputActions;
     private CameraObstacleFade obstacleFade;
-
-    private readonly RaycastHit[] hitBuffer = new RaycastHit[16];
-    private readonly float[] entryDist = new float[MaxCrossings];
-    private readonly float[] exitDist = new float[MaxCrossings];
-    private readonly float[] intStart = new float[MaxCrossings];
-    private readonly float[] intEnd = new float[MaxCrossings];
 
     private float targetXAngle;
     private float targetYAngle;
@@ -84,12 +65,19 @@ public class OrbitCamera : MonoBehaviour
 
     private Vector3 smoothedPivot;
     private Vector3 pivotVelocity;
-
     private float currentDistance;
     private float distanceVelocity;
 
+    private readonly RaycastHit[] castHits = new RaycastHit[16];
+    private readonly Collider[] overlapColliders = new Collider[16];
+    private static SphereCollider tempProbeSphere;
+
     void Awake()
     {
+        cam = GetComponent<Camera>();
+        if (cam != null && autoAdjustNearClip && cam.nearClipPlane > preferredNearClip)
+            cam.nearClipPlane = preferredNearClip;
+
         inputActions = new BallInputActions();
         obstacleFade = GetComponent<CameraObstacleFade>();
         if (obstacleFade != null && obstacleFade.playerTarget == null && target != null)
@@ -119,13 +107,25 @@ public class OrbitCamera : MonoBehaviour
         Vector3 angles = transform.eulerAngles;
         targetXAngle = currentXAngle = angles.y;
         targetYAngle = currentYAngle = angles.x;
-        currentDistance = distance;
+        currentDistance = Mathf.Max(distance, minDistance);
 
         if (target != null)
+        {
             smoothedPivot = target.position;
+            DetectBallRadius();
+        }
     }
 
-    // --- Публичные методы для привязки к UI-слайдерам в меню настроек ---
+    private void DetectBallRadius()
+    {
+        if (target == null) return;
+        if (target.TryGetComponent(out SphereCollider sphere))
+        {
+            Vector3 s = target.lossyScale;
+            float maxScale = Mathf.Max(Mathf.Abs(s.x), Mathf.Abs(s.y), Mathf.Abs(s.z));
+            ballRadius = Mathf.Max(0.05f, sphere.radius * maxScale);
+        }
+    }
 
     public void SetSensitivity(float uniformSens)
     {
@@ -134,35 +134,21 @@ public class OrbitCamera : MonoBehaviour
         ySpeed = clamped;
     }
 
-    public void SetSensitivityX(float sensX)
-    {
-        xSpeed = Mathf.Clamp(sensX, 0.1f, 10f);
-    }
-
-    public void SetSensitivityY(float sensY)
-    {
-        ySpeed = Mathf.Clamp(sensY, 0.1f, 10f);
-    }
-
-    public void SetInvertY(bool invert)
-    {
-        invertY = invert;
-    }
-
-    // -------------------------------------------------------------------
+    public void SetSensitivityX(float sensX) => xSpeed = Mathf.Clamp(sensX, 0.1f, 10f);
+    public void SetSensitivityY(float sensY) => ySpeed = Mathf.Clamp(sensY, 0.1f, 10f);
+    public void SetInvertY(bool invert) => invertY = invert;
 
     void LateUpdate()
     {
         if (!target) return;
 
         float dt = Time.deltaTime;
-        // Если игра на паузе (например, открыто меню настроек) — не крутим камеру
         if (dt <= 0f) return;
 
         if (obstacleFade != null && obstacleFade.playerTarget != target)
             obstacleFade.playerTarget = target;
 
-        // 1. Чтение ввода (отдельно для мыши и для стика геймпада)
+        // 1. Ввод вращения камеры
         var lookAction = inputActions.Player.Look;
         Vector2 lookInput = lookAction.ReadValue<Vector2>();
         if (lookInput.sqrMagnitude > 0f)
@@ -179,13 +165,12 @@ public class OrbitCamera : MonoBehaviour
             else
             {
                 targetXAngle += lookInput.x * xSpeed * mouseBaseScale;
-                targetYAngle += ySign * lookInput.y * ySpeed * mouseBaseScale;
+                targetYAngle += ySign * lookInput.y * mouseBaseScale;
             }
 
             targetYAngle = Mathf.Clamp(targetYAngle, yMinLimit, yMaxLimit);
         }
 
-        // 2. Плавное вращение камеры
         if (rotationSmoothTime > 0.001f)
         {
             currentXAngle = Mathf.SmoothDampAngle(currentXAngle, targetXAngle, ref xAngleVelocity, rotationSmoothTime, Mathf.Infinity, dt);
@@ -197,242 +182,263 @@ public class OrbitCamera : MonoBehaviour
             currentYAngle = targetYAngle;
         }
 
-        // 3. Плавное слежение за точкой привязки шара
-        Vector3 rawPivot = target.position;
-        if (followSmoothTime > 0.001f && (smoothedPivot - rawPivot).sqrMagnitude < 25f)
+        // 2. Плавное слежение за шаром с жёстким ограничением отставания
+        Vector3 rawBallCenter = target.position;
+        if (followSmoothTime > 0.001f && (smoothedPivot - rawBallCenter).sqrMagnitude < 25f)
         {
-            smoothedPivot = Vector3.SmoothDamp(smoothedPivot, rawPivot, ref pivotVelocity, followSmoothTime, Mathf.Infinity, dt);
+            smoothedPivot = Vector3.SmoothDamp(smoothedPivot, rawBallCenter, ref pivotVelocity, followSmoothTime, Mathf.Infinity, dt);
+            Vector3 lag = smoothedPivot - rawBallCenter;
+            if (lag.magnitude > maxPivotLag)
+                smoothedPivot = rawBallCenter + lag.normalized * maxPivotLag;
         }
         else
         {
-            smoothedPivot = rawPivot;
+            smoothedPivot = rawBallCenter;
             pivotVelocity = Vector3.zero;
         }
 
-        Quaternion rotation = Quaternion.Euler(currentYAngle, currentXAngle, 0f);
+        LayerMask wallMask = GetWallCollisionMask();
+        float near = cam != null ? cam.nearClipPlane : preferredNearClip;
+        float frustumCornerRadius = ComputeNearPlaneCornerRadius(near);
+        float edgeSafetyRadius = frustumCornerRadius + collisionBuffer * 0.5f;
+        float castRadius = Mathf.Max(sphereRadius, edgeSafetyRadius);
+
+        // 3. Защита точки привязки от пробивания потолка / нависающих стен
         Vector3 elevatedTarget = smoothedPivot + Vector3.up * heightOffset;
-
-        if (heightOffset > 0.05f && CastHardWall(smoothedPivot, Vector3.up, heightOffset, sphereRadius * 0.6f, out RaycastHit upHit))
+        if (wallMask.value != 0 && heightOffset > 0.01f)
         {
-            elevatedTarget = smoothedPivot + Vector3.up * Mathf.Max(0.1f, upHit.distance - collisionBuffer);
+            if (CastClosest(rawBallCenter, Vector3.up, heightOffset, castRadius * 0.85f, wallMask, out RaycastHit upHit))
+            {
+                float safeHeight = Mathf.Max(0f, upHit.distance - collisionBuffer);
+                elevatedTarget = rawBallCenter + Vector3.up * safeHeight;
+            }
         }
 
+        Quaternion rotation = Quaternion.Euler(currentYAngle, currentXAngle, 0f);
         Vector3 dir = rotation * Vector3.back;
+        float desiredDist = Mathf.Max(distance, minDistance);
 
-        // 4. Проверка твёрдых стен
-        float maxReach = distance + (allowPassBehindObject ? behindObjectExtraDistance : 0f);
-        float wallFree = maxReach;
-        if (CastHardWall(elevatedTarget, dir, maxReach, sphereRadius, out RaycastHit backHit))
+        // 4. Проверка стен центральным SphereCast и 8 точками периметра ближней плоскости экрана
+        float targetDist = desiredDist;
+        if (wallMask.value != 0)
         {
-            wallFree = Mathf.Max(minDistance, backHit.distance - collisionBuffer);
+            if (CastClosest(elevatedTarget, dir, desiredDist, castRadius, wallMask, out RaycastHit wallHit))
+            {
+                targetDist = Mathf.Max(0.05f, wallHit.distance - collisionBuffer);
+            }
+
+            targetDist = ClampDistanceByNearPlanePerimeter(elevatedTarget, dir, rotation, targetDist, near, wallMask);
         }
 
-        float desiredDistance = Mathf.Min(distance, wallFree);
-        bool snap = false;
-
-        // 5. Проверка объектов перекрытия (колонна, платформы)
-        if (cutoutObjectLayers.value != 0)
+        // Приближение к стене — мгновенно (чтобы края экрана не проваливались за стену), отдаление — плавно
+        if (targetDist < currentDistance || distanceSmoothTime <= 0.001f)
         {
-            float clearance = Mathf.Max(minObjectProximity, sphereRadius + 0.05f);
-            int n = BuildSolidIntervals(elevatedTarget, dir, wallFree + clearance, clearance);
-            desiredDistance = ResolveAgainstIntervals(desiredDistance, wallFree, n);
-            snap = instantPassThrough && RangeCrossesSolid(currentDistance, desiredDistance, n);
-        }
-
-        // 6. Плавная интерполяция дистанции
-        if (snap)
-        {
-            currentDistance = desiredDistance;
+            currentDistance = targetDist;
             distanceVelocity = 0f;
         }
         else
         {
-            float smooth = desiredDistance < currentDistance ? distanceSmoothTime * 0.5f : distanceSmoothTime;
-            currentDistance = smooth > 0.001f
-                ? Mathf.SmoothDamp(currentDistance, desiredDistance, ref distanceVelocity, smooth, Mathf.Infinity, dt)
-                : desiredDistance;
+            currentDistance = Mathf.SmoothDamp(currentDistance, targetDist, ref distanceVelocity, distanceSmoothTime, Mathf.Infinity, dt);
         }
 
-        transform.SetPositionAndRotation(elevatedTarget + dir * currentDistance, rotation);
+        Vector3 finalPos = elevatedTarget + dir * currentDistance;
+
+        // 5. Защита от влетания камеры в шар (с обходом вверх вдоль стены, если шар прижат в угол)
+        float minAllowedFromBall = ballRadius + near + minBallClearance;
+        finalPos = EnforceBallClearance(finalPos, rawBallCenter, dir, minAllowedFromBall, edgeSafetyRadius, wallMask);
+
+        // 6. Финальное выталкивание ближней плоскости камеры из твёрдых стен (устраняет просветы по краям экрана)
+        if (wallMask.value != 0)
+        {
+            finalPos = DepenetrateFromWalls(finalPos, edgeSafetyRadius, wallMask, rawBallCenter, minAllowedFromBall);
+        }
+
+        transform.SetPositionAndRotation(finalPos, rotation);
     }
 
-    private int BuildSolidIntervals(Vector3 origin, Vector3 dir, float length, float clearance)
+    private LayerMask GetWallCollisionMask()
     {
-        int nEntry = CollectCrossingsNonAlloc(origin, dir, length, entryDist, false);
-
-        Vector3 end = origin + dir * length;
-        int nExit = CollectCrossingsNonAlloc(end, -dir, length, exitDist, true);
-
-        Array.Sort(entryDist, 0, nEntry);
-        Array.Sort(exitDist, 0, nExit);
-
-        int count = 0;
-        int ei = 0, xi = 0, depth = 0;
-        float start = 0f;
-
-        if (nExit > 0 && (nEntry == 0 || exitDist[0] < entryDist[0]))
-        {
-            depth = 1;
-            start = 0f;
-        }
-
-        while (ei < nEntry || xi < nExit)
-        {
-            bool takeEntry = xi >= nExit || (ei < nEntry && entryDist[ei] <= exitDist[xi]);
-            if (takeEntry)
-            {
-                if (depth == 0) start = entryDist[ei];
-                depth++;
-                ei++;
-            }
-            else
-            {
-                if (depth > 0)
-                {
-                    depth--;
-                    if (depth == 0 && count < MaxCrossings)
-                    {
-                        intStart[count] = start;
-                        intEnd[count] = exitDist[xi];
-                        count++;
-                    }
-                }
-                xi++;
-            }
-        }
-
-        if (depth > 0 && count < MaxCrossings)
-        {
-            intStart[count] = start;
-            intEnd[count] = NoEnd;
-            count++;
-        }
-
-        int merged = 0;
-        for (int i = 0; i < count; i++)
-        {
-            float s = Mathf.Max(0f, intStart[i] - clearance);
-            float e = intEnd[i] >= NoEnd ? NoEnd : intEnd[i] + clearance;
-
-            if (merged > 0 && s <= intEnd[merged - 1])
-            {
-                intEnd[merged - 1] = Mathf.Max(intEnd[merged - 1], e);
-            }
-            else
-            {
-                intStart[merged] = s;
-                intEnd[merged] = e;
-                merged++;
-            }
-        }
-
-        return merged;
+        int mask = hardWallLayers.value;
+        if (!allowPassBehindObject)
+            mask |= cutoutObjectLayers.value;
+        return mask;
     }
 
-    private int CollectCrossingsNonAlloc(Vector3 from, Vector3 dir, float length, float[] result, bool invertDistance)
+    private float ComputeNearPlaneCornerRadius(float near)
     {
-        int rawHits = Physics.RaycastNonAlloc(from, dir, hitBuffer, length, cutoutObjectLayers, QueryTriggerInteraction.Ignore);
-        int n = 0;
-
-        for (int i = 0; i < rawHits && n < result.Length; i++)
-        {
-            Collider col = hitBuffer[i].collider;
-            if (col == null || IsTarget(col)) continue;
-
-            float d = hitBuffer[i].distance;
-            result[n++] = invertDistance ? (length - d) : d;
-        }
-
-        return n;
+        float fov = cam != null ? cam.fieldOfView : 60f;
+        float aspect = cam != null ? cam.aspect : (16f / 9f);
+        float halfH = near * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad);
+        float halfW = halfH * aspect;
+        return Mathf.Sqrt(near * near + halfH * halfH + halfW * halfW);
     }
 
-    private float ResolveAgainstIntervals(float dist, float wallFree, int n)
-    {
-        for (int i = 0; i < n; i++)
-        {
-            if (dist > intStart[i] && dist < intEnd[i])
-            {
-                float behind = intEnd[i];
-                float front = intStart[i];
-
-                dist = (allowPassBehindObject && behind <= wallFree)
-                    ? behind
-                    : Mathf.Max(minDistance, front);
-            }
-        }
-
-        return dist;
-    }
-
-    private bool RangeCrossesSolid(float a, float b, int n)
-    {
-        float lo = Mathf.Min(a, b);
-        float hi = Mathf.Max(a, b);
-
-        for (int i = 0; i < n; i++)
-        {
-            if (intStart[i] < hi && intEnd[i] > lo) return true;
-        }
-
-        return false;
-    }
-
-    private bool IsTarget(Collider col)
-    {
-        return col.transform == target || col.transform.IsChildOf(target);
-    }
-
-    private bool CastHardWall(Vector3 origin, Vector3 direction, float maxDist, float radius, out RaycastHit bestHit)
+    private bool CastClosest(Vector3 origin, Vector3 direction, float maxDist, float radius, LayerMask mask, out RaycastHit bestHit)
     {
         bestHit = default;
-        if (hardWallLayers.value == 0) return false;
-
-        // Обычно hardWallLayers не содержит игрока: в таком случае достаточно
-        // обычного SphereCast, который возвращает только ближайшее пересечение.
-        if (Physics.SphereCast(
-            origin,
-            radius,
-            direction,
-            out bestHit,
-            maxDist,
-            hardWallLayers,
-            QueryTriggerInteraction.Ignore))
-        {
-            if (bestHit.collider != null && !IsTarget(bestHit.collider))
-                return true;
-
-            // Совместимость с конфигурацией, где коллайдер цели тоже входит
-            // в hardWallLayers: ищем ближайшее пересечение, не принадлежащее цели.
-        }
-        else
-        {
-            return false;
-        }
-
-        int count = Physics.SphereCastNonAlloc(
-            origin,
-            radius,
-            direction,
-            hitBuffer,
-            maxDist,
-            hardWallLayers,
-            QueryTriggerInteraction.Ignore);
-
-        float closestDist = float.MaxValue;
+        int count = Physics.SphereCastNonAlloc(origin, radius, direction, castHits, maxDist, mask, QueryTriggerInteraction.Ignore);
+        float minHitDist = float.MaxValue;
         bool found = false;
+
         for (int i = 0; i < count; i++)
         {
-            RaycastHit h = hitBuffer[i];
-            if (h.collider == null || IsTarget(h.collider)) continue;
+            Collider col = castHits[i].collider;
+            if (col == null || col.transform == target || col.transform.IsChildOf(target))
+                continue;
 
-            if (h.distance < closestDist)
+            if (castHits[i].distance < minHitDist)
             {
-                closestDist = h.distance;
-                bestHit = h;
+                minHitDist = castHits[i].distance;
+                bestHit = castHits[i];
                 found = true;
             }
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// Проверяет все 4 угла и 4 середины сторон ближней плоскости камеры (с запасом collisionBuffer),
+    /// чтобы края экрана не выходили за стены при взгляде вдоль стены под острым углом.
+    /// </summary>
+    private float ClampDistanceByNearPlanePerimeter(Vector3 pivot, Vector3 dir, Quaternion rot, float currentDist, float near, LayerMask mask)
+    {
+        float fov = cam != null ? cam.fieldOfView : 60f;
+        float aspect = cam != null ? cam.aspect : (16f / 9f);
+
+        float checkDepth = near + collisionBuffer;
+        float halfH = checkDepth * Mathf.Tan(fov * 0.5f * Mathf.Deg2Rad) + collisionBuffer * 0.5f;
+        float halfW = halfH * aspect;
+
+        Vector3 candidateCamPos = pivot + dir * currentDist;
+        Vector3 forward = rot * Vector3.forward;
+        Vector3 right = rot * Vector3.right;
+        Vector3 up = rot * Vector3.up;
+
+        Vector3 nearCenter = candidateCamPos + forward * checkDepth;
+        float resultDist = currentDist;
+
+        for (int sx = -1; sx <= 1; sx++)
+        {
+            for (int sy = -1; sy <= 1; sy++)
+            {
+                if (sx == 0 && sy == 0) continue;
+
+                Vector3 perimeterPoint = nearCenter + right * (sx * halfW) + up * (sy * halfH);
+                Vector3 toPoint = perimeterPoint - pivot;
+                float rayLen = toPoint.magnitude;
+                if (rayLen <= 0.001f) continue;
+
+                if (Physics.Raycast(pivot, toPoint / rayLen, out RaycastHit hit, rayLen, mask, QueryTriggerInteraction.Ignore))
+                {
+                    if (hit.collider.transform != target && !hit.collider.transform.IsChildOf(target))
+                    {
+                        float ratio = Mathf.Clamp01(hit.distance / rayLen);
+                        float safeDist = Mathf.Max(0.05f, currentDist * ratio - collisionBuffer * 0.35f);
+                        if (safeDist < resultDist)
+                            resultDist = safeDist;
+                    }
+                }
+            }
+        }
+
+        return resultDist;
+    }
+
+    private Vector3 EnforceBallClearance(
+        Vector3 pos,
+        Vector3 ballCenter,
+        Vector3 fallbackDir,
+        float minBallDist,
+        float wallCheckRadius,
+        LayerMask wallMask)
+    {
+        Vector3 fromBall = pos - ballCenter;
+        float distFromBall = fromBall.magnitude;
+
+        if (distFromBall >= minBallDist)
+            return pos;
+
+        Vector3 pushOutDir = distFromBall > 0.001f ? (fromBall / distFromBall) : fallbackDir;
+        Vector3 radialPushed = ballCenter + pushOutDir * minBallDist;
+
+        if (wallMask.value == 0 || !IsBlockedByWall(radialPushed, wallCheckRadius, wallMask))
+            return radialPushed;
+
+        // Если сзади упор в стену — поднимаем камеру вверх вдоль стены на безопасную дистанцию от шара
+        Vector3 horizOffset = new Vector3(fromBall.x, 0f, fromBall.z);
+        float horizSqr = horizOffset.sqrMagnitude;
+        float requiredDy = Mathf.Sqrt(Mathf.Max(0f, minBallDist * minBallDist - horizSqr));
+
+        Vector3 liftedUp = new Vector3(pos.x, ballCenter.y + requiredDy, pos.z);
+        if (!IsBlockedByWall(liftedUp, wallCheckRadius, wallMask))
+            return liftedUp;
+
+        Vector3 liftedDown = new Vector3(pos.x, ballCenter.y - requiredDy, pos.z);
+        if (!IsBlockedByWall(liftedDown, wallCheckRadius, wallMask))
+            return liftedDown;
+
+        return radialPushed;
+    }
+
+    private bool IsBlockedByWall(Vector3 pos, float radius, LayerMask mask)
+    {
+        int count = Physics.OverlapSphereNonAlloc(pos, radius, overlapColliders, mask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < count; i++)
+        {
+            Collider col = overlapColliders[i];
+            if (col != null && col.transform != target && !col.transform.IsChildOf(target))
+                return true;
+        }
+        return false;
+    }
+
+    private Vector3 DepenetrateFromWalls(Vector3 pos, float checkRadius, LayerMask mask, Vector3 ballCenter, float minBallDist)
+    {
+        int count = Physics.OverlapSphereNonAlloc(pos, checkRadius, overlapColliders, mask, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < count; i++)
+        {
+            Collider col = overlapColliders[i];
+            if (col == null || col.transform == target || col.transform.IsChildOf(target))
+                continue;
+
+            if (Physics.ComputePenetration(
+                col, col.transform.position, col.transform.rotation,
+                GetTempProbeSphere(checkRadius), pos, Quaternion.identity,
+                out Vector3 sepDir, out float sepDist))
+            {
+                Vector3 wallOutNormal = -sepDir;
+                pos += wallOutNormal * (sepDist + 0.01f);
+
+                // Если выталкивание из стены прижало камеру к шару — скользим вдоль стены от центра шара
+                Vector3 fromBall = pos - ballCenter;
+                float dist = fromBall.magnitude;
+                if (dist < minBallDist)
+                {
+                    Vector3 tangentOut = Vector3.ProjectOnPlane(fromBall, wallOutNormal);
+                    if (tangentOut.sqrMagnitude > 0.0001f)
+                    {
+                        tangentOut.Normalize();
+                        float alongNormal = Vector3.Dot(fromBall, wallOutNormal);
+                        float neededTangent = Mathf.Sqrt(Mathf.Max(0f, minBallDist * minBallDist - alongNormal * alongNormal));
+                        pos = ballCenter + wallOutNormal * alongNormal + tangentOut * neededTangent;
+                    }
+                }
+            }
+        }
+        return pos;
+    }
+
+    private static SphereCollider GetTempProbeSphere(float radius)
+    {
+        if (tempProbeSphere == null)
+        {
+            var go = new GameObject("~CamCollisionProbe");
+            go.hideFlags = HideFlags.HideAndDontSave;
+            go.SetActive(false);
+            tempProbeSphere = go.AddComponent<SphereCollider>();
+        }
+        tempProbeSphere.radius = radius;
+        return tempProbeSphere;
     }
 }

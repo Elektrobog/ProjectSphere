@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
@@ -12,7 +11,8 @@ using UnityEditor.Events;
 #endif
 
 /// <summary>
-/// Стилизованное меню паузы с полной автогенерацией элементов и настройкой из инспектора.
+/// Стилизованное меню паузы с полной автогенерацией элементов, панели настроек
+/// (раздельная чувствительность X/Y со слайдером и полем ввода + лимит FPS) и настройкой из инспектора.
 /// </summary>
 public class PauseMenuManager : MonoBehaviour
 {
@@ -29,7 +29,7 @@ public class PauseMenuManager : MonoBehaviour
     [Tooltip("Главная панель меню паузы.")]
     public GameObject pausePanel;
 
-    [Tooltip("Необязательно: панель настроек (для кнопки Settings).")]
+    [Tooltip("Панель настроек (генерируется или привязывается автоматически).")]
     public GameObject settingsPanel;
 
     [Tooltip("Необязательно: скрипт подтверждения выхода.")]
@@ -44,7 +44,7 @@ public class PauseMenuManager : MonoBehaviour
 
     [Header("Заголовок паузы")]
     public string titleText = "PAUSED";
-    [Tooltip("Необязательный подзаголовок под надписью PAUSED (оставьте пустым, чтобы скрыть).")]
+    [Tooltip("Необязательный подзаголовок под надписью PAUSED.")]
     public string subtitleText = "GAME PAUSED";
     [Range(20, 72)] public int titleFontSize = 38;
     [Range(10, 32)] public int subtitleFontSize = 13;
@@ -52,19 +52,12 @@ public class PauseMenuManager : MonoBehaviour
     public Color subtitleColor = new Color(0.12f, 0.75f, 1f, 0.85f);
 
     [Header("Задник и карточка меню (Sci-Fi стиль)")]
-    [Tooltip("Автоматически обновлять внешний вид меню в редакторе при изменении параметров в инспекторе.")]
     public bool livePreviewInEditor = true;
-
-    [Tooltip("Цвет полноэкранного затемнения позади меню.")]
     public Color backdropColor = new Color(0.02f, 0.04f, 0.07f, 0.78f);
-
-    [Tooltip("Цвет центральной карточки меню.")]
     public Color windowColor = new Color(0.08f, 0.12f, 0.17f, 0.96f);
-
-    [Tooltip("Акцентный неоновый цвет (рамка, верхняя полоса, разделитель, индикаторы кнопок).")]
     public Color accentColor = new Color(0.12f, 0.75f, 1f, 0.9f);
 
-    [Min(260f)] public float windowWidth = 420f;
+    [Min(260f)] public float windowWidth = 440f;
     [Min(12f)] public float windowPadding = 32f;
     [Min(0f)] public float borderThickness = 2f;
     public bool showTopAccentBar = true;
@@ -72,9 +65,8 @@ public class PauseMenuManager : MonoBehaviour
     public float verticalOffset = 0f;
 
     [Header("Стиль и размеры кнопок")]
-    [Tooltip("Применять единый Sci-Fi стиль к кнопкам (если выключить — сохранится дизайн вашей шаблонной кнопки).")]
     public bool applyButtonStyle = true;
-    [Min(160f)] public float buttonWidth = 330f;
+    [Min(160f)] public float buttonWidth = 340f;
     [Min(32f)] public float buttonHeight = 50f;
     [Min(4f)] public float buttonSpacing = 12f;
     [Range(12, 36)] public int buttonFontSize = 21;
@@ -95,6 +87,7 @@ public class PauseMenuManager : MonoBehaviour
 
     private const string BackdropObjectName = "PauseBackdrop";
     private const string WindowObjectName = "MenuWindow";
+    private const string SettingsPanelObjectName = "SettingsPanel";
 
     private bool _paused;
 
@@ -104,6 +97,9 @@ public class PauseMenuManager : MonoBehaviour
 
     private void Awake()
     {
+        // Применяем сохранённую чувствительность и FPS сразу при старте уровня
+        GameSettings.ApplySavedSettings();
+
         if (pausePanel == null)
         {
             Transform found = transform.Find("PausePanel");
@@ -111,19 +107,29 @@ public class PauseMenuManager : MonoBehaviour
                 pausePanel = found.gameObject;
         }
 
+        if (settingsPanel == null && pausePanel != null)
+        {
+            Transform foundSettings = pausePanel.transform.Find(SettingsPanelObjectName);
+            if (foundSettings != null)
+                settingsPanel = foundSettings.gameObject;
+        }
+
         if (exitGame == null)
-            exitGame = FindFirstObjectByType<ExitGame>(FindObjectsInactive.Include);
+            exitGame = FindAnyObjectByType<ExitGame>(FindObjectsInactive.Include);
 
         if (respawnManager == null)
             respawnManager = RespawnManager.Instance != null
                 ? RespawnManager.Instance
-                : FindFirstObjectByType<RespawnManager>(FindObjectsInactive.Include);
+                : FindAnyObjectByType<RespawnManager>(FindObjectsInactive.Include);
 
         if (pausePanel != null)
         {
-            // Если меню ещё не сгенерировано в редакторе — строим его при запуске,
-            // иначе просто гарантируем привязку всех событий кнопок.
-            if (pausePanel.transform.Find(WindowObjectName) == null)
+            bool needsRebuild = pausePanel.transform.Find(WindowObjectName) == null
+                             || settingsPanel == null
+                             || settingsPanel.transform.Find(WindowObjectName) == null
+                             || settingsPanel.transform.Find(WindowObjectName)?.Find("HorizontalSensInput") == null;
+
+            if (needsRebuild)
                 GenerateAllMenuButtons(false);
             else
                 RebindExistingButtonsRuntime();
@@ -134,8 +140,6 @@ public class PauseMenuManager : MonoBehaviour
 
         if (pausePanel != null)
             pausePanel.SetActive(false);
-        else
-            Debug.LogError("[PauseMenuManager] Не назначена ссылка Pause Panel в инспекторе!", this);
     }
 
 #if UNITY_EDITOR
@@ -196,6 +200,9 @@ public class PauseMenuManager : MonoBehaviour
         if (pausePanel != null)
             pausePanel.SetActive(true);
 
+        if (settingsPanel != null)
+            settingsPanel.SetActive(false);
+
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
     }
@@ -226,7 +233,7 @@ public class PauseMenuManager : MonoBehaviour
         if (respawnManager == null)
             respawnManager = RespawnManager.Instance != null
                 ? RespawnManager.Instance
-                : FindFirstObjectByType<RespawnManager>(FindObjectsInactive.Include);
+                : FindAnyObjectByType<RespawnManager>(FindObjectsInactive.Include);
 
         if (respawnManager != null)
         {
@@ -248,16 +255,43 @@ public class PauseMenuManager : MonoBehaviour
 
     public void OpenSettings()
     {
+        if (settingsPanel == null && pausePanel != null)
+        {
+            Transform found = pausePanel.transform.Find(SettingsPanelObjectName);
+            if (found != null)
+            {
+                settingsPanel = found.gameObject;
+            }
+            else
+            {
+                GenerateAllMenuButtons(false);
+                found = pausePanel.transform.Find(SettingsPanelObjectName);
+                if (found != null) settingsPanel = found.gameObject;
+            }
+        }
+
+        if (pausePanel != null)
+            pausePanel.SetActive(true);
+
         if (settingsPanel != null)
+        {
             settingsPanel.SetActive(true);
+            if (settingsPanel.TryGetComponent(out GameSettings gs))
+                gs.BindUI();
+        }
         else
-            Debug.LogWarning("[PauseMenuManager] Панель настроек (Settings Panel) не назначена в инспекторе!", this);
+        {
+            Debug.LogError("[PauseMenuManager] Не удалось создать или найти панель настроек (Settings Panel)!", this);
+        }
     }
 
     public void CloseSettings()
     {
         if (settingsPanel != null)
             settingsPanel.SetActive(false);
+
+        if (pausePanel != null)
+            pausePanel.SetActive(true);
     }
 
     public void LoadMainMenu()
@@ -289,7 +323,7 @@ public class PauseMenuManager : MonoBehaviour
     }
 
     // =====================================================================
-    // ГЕНЕРАЦИЯ И СТИЛИЗАЦИЯ МЕНЮ
+    // ГЕНЕРАЦИЯ И СТИЛИЗАЦИЯ МЕНЮ И НАСТРОЕК
     // =====================================================================
 
     private List<MenuButtonConfig> GetOrderedConfigs()
@@ -305,7 +339,7 @@ public class PauseMenuManager : MonoBehaviour
         if (resumeButton.enabled) list.Add(resumeButton);
         if (restartCheckpointButton.enabled) list.Add(restartCheckpointButton);
         if (restartLevelButton.enabled) list.Add(restartLevelButton);
-        if (settingsButton.enabled && (settingsPanel != null || !Application.isPlaying)) list.Add(settingsButton);
+        if (settingsButton.enabled) list.Add(settingsButton);
         if (mainMenuButton.enabled && !string.IsNullOrEmpty(mainMenuSceneName)) list.Add(mainMenuButton);
         if (quitButton.enabled) list.Add(quitButton);
 
@@ -315,17 +349,40 @@ public class PauseMenuManager : MonoBehaviour
     private void RebindExistingButtonsRuntime()
     {
         Transform win = pausePanel.transform.Find(WindowObjectName);
-        if (win == null) return;
-
-        List<MenuButtonConfig> configs = GetOrderedConfigs();
-        for (int i = 0; i < configs.Count; i++)
+        if (win != null)
         {
-            Transform btnTr = win.Find(configs[i].objectName);
-            if (btnTr != null && btnTr.TryGetComponent(out Button btn))
+            List<MenuButtonConfig> configs = GetOrderedConfigs();
+            for (int i = 0; i < configs.Count; i++)
             {
-                btn.onClick.RemoveAllListeners();
-                if (configs[i].runtimeAction != null)
-                    btn.onClick.AddListener(configs[i].runtimeAction);
+                Transform btnTr = win.Find(configs[i].objectName);
+                if (btnTr != null && btnTr.TryGetComponent(out Button btn))
+                {
+                    btn.onClick.RemoveAllListeners();
+                    if (configs[i].runtimeAction != null)
+                        btn.onClick.AddListener(configs[i].runtimeAction);
+                }
+            }
+        }
+
+        if (settingsPanel != null)
+        {
+            Transform settingsWin = settingsPanel.transform.Find(WindowObjectName);
+            if (settingsWin != null)
+            {
+                Transform backBtnTr = settingsWin.Find("BackButton");
+                if (backBtnTr != null && backBtnTr.TryGetComponent(out Button backBtn))
+                {
+                    backBtn.onClick.RemoveAllListeners();
+                    backBtn.onClick.AddListener(CloseSettings);
+                }
+
+                Transform resetBtnTr = settingsWin.Find("ResetButton");
+                if (resetBtnTr != null && resetBtnTr.TryGetComponent(out Button resetBtn) &&
+                    settingsPanel.TryGetComponent(out GameSettings gs))
+                {
+                    resetBtn.onClick.RemoveAllListeners();
+                    resetBtn.onClick.AddListener(gs.ResetToDefaults);
+                }
             }
         }
     }
@@ -355,23 +412,36 @@ public class PauseMenuManager : MonoBehaviour
             return;
 
         Transform confirmRoot = (exitGame != null && exitGame.confirmPanel != null) ? exitGame.confirmPanel.transform : null;
-        Transform settingsRoot = settingsPanel != null ? settingsPanel.transform : null;
 
-        // 1. Сохраняем визуальный шаблон из существующей кнопки или текстового компонента (чтобы подхватить шрифт проекта)
+        if (settingsPanel == null)
+        {
+            Transform foundSettings = pausePanel.transform.Find(SettingsPanelObjectName);
+            if (foundSettings != null) settingsPanel = foundSettings.gameObject;
+            else
+            {
+                GameObject spGo = CreateUINode(SettingsPanelObjectName, pausePanel.transform, recordUndo);
+                RectTransform spRt = spGo.GetComponent<RectTransform>();
+                spRt.anchorMin = Vector2.zero;
+                spRt.anchorMax = Vector2.one;
+                spRt.offsetMin = Vector2.zero;
+                spRt.offsetMax = Vector2.zero;
+                settingsPanel = spGo;
+            }
+        }
+
+        Transform settingsRoot = settingsPanel.transform;
+
         GameObject buttonTemplate = FindOrCreateButtonTemplate(confirmRoot, settingsRoot);
         GameObject textTemplate = FindTextTemplate(pausePanel.transform, confirmRoot, settingsRoot);
 
-        // 2. Удаляем старые сгенерированные элементы и старые кнопки меню
         CleanupOldMenuObjects(confirmRoot, settingsRoot, recordUndo);
 
-        // Если на самом PausePanel висит Image — делаем его прозрачным, чтобы цвет задника задавался ровно одним слоем PauseBackdrop
         if (pausePanel.TryGetComponent(out Image rootPanelImg))
         {
             rootPanelImg.color = new Color(0f, 0f, 0f, 0f);
             rootPanelImg.raycastTarget = false;
         }
 
-        // 3. Создаём полноэкранный задник (PauseBackdrop)
         GameObject backdropGo = CreateUINode(BackdropObjectName, pausePanel.transform, recordUndo);
         backdropGo.transform.SetSiblingIndex(0);
         RectTransform backdropRt = backdropGo.GetComponent<RectTransform>();
@@ -384,7 +454,6 @@ public class PauseMenuManager : MonoBehaviour
         backdropImg.color = backdropColor;
         backdropImg.raycastTarget = true;
 
-        // 4. Рассчитываем высоту центральной карточки меню
         bool hasTitle = !string.IsNullOrWhiteSpace(titleText);
         bool hasSubtitle = !string.IsNullOrWhiteSpace(subtitleText);
 
@@ -400,7 +469,6 @@ public class PauseMenuManager : MonoBehaviour
         float buttonsBlockHeight = configs.Count * buttonHeight + Mathf.Max(0, configs.Count - 1) * buttonSpacing;
         float totalWindowHeight = windowPadding * 2f + headerBlockHeight + buttonsBlockHeight;
 
-        // 5. Создаём центральную карточку меню (MenuWindow)
         GameObject windowGo = CreateUINode(WindowObjectName, pausePanel.transform, recordUndo);
         windowGo.transform.SetSiblingIndex(1);
         RectTransform windowRt = windowGo.GetComponent<RectTransform>();
@@ -420,7 +488,6 @@ public class PauseMenuManager : MonoBehaviour
             outline.effectDistance = new Vector2(borderThickness, -borderThickness);
         }
 
-        // Верхняя неоновая полоска карточки
         if (showTopAccentBar)
         {
             GameObject topBar = CreateUINode("TopAccentBar", windowGo.transform, recordUndo);
@@ -436,7 +503,6 @@ public class PauseMenuManager : MonoBehaviour
             barImg.raycastTarget = false;
         }
 
-        // 6. Заголовок PAUSED, подзаголовок и разделитель
         float cursorY = totalWindowHeight * 0.5f - windowPadding;
         float contentWidth = windowWidth - windowPadding * 2f;
 
@@ -483,7 +549,6 @@ public class PauseMenuManager : MonoBehaviour
             }
         }
 
-        // 7. Создаём и стилизуем все кнопки внутри карточки
         float finalBtnWidth = Mathf.Min(buttonWidth, contentWidth);
         for (int i = 0; i < configs.Count; i++)
         {
@@ -513,15 +578,375 @@ public class PauseMenuManager : MonoBehaviour
                 BindButtonAction(btn, cfg.runtimeAction, recordUndo);
         }
 
-        // Держим окно подтверждения выхода и настройки поверх карточки паузы
+        BuildSettingsPanel(settingsPanel, buttonTemplate, textTemplate, recordUndo);
+
         if (confirmRoot != null && confirmRoot.parent == pausePanel.transform)
             confirmRoot.SetAsLastSibling();
-        if (settingsRoot != null && settingsRoot.parent == pausePanel.transform)
-            settingsRoot.SetAsLastSibling();
+        if (settingsPanel != null)
+            settingsPanel.transform.SetAsLastSibling();
 
         DestroySafe(buttonTemplate);
         if (textTemplate != null)
             DestroySafe(textTemplate);
+    }
+
+    private void BuildSettingsPanel(GameObject panelGo, GameObject buttonTemplate, GameObject textTemplate, bool recordUndo)
+    {
+        for (int i = panelGo.transform.childCount - 1; i >= 0; i--)
+        {
+            DestroySafe(panelGo.transform.GetChild(i).gameObject);
+        }
+
+        GameObject bgGo = CreateUINode("SettingsBackdrop", panelGo.transform, recordUndo);
+        RectTransform bgRt = bgGo.GetComponent<RectTransform>();
+        bgRt.anchorMin = Vector2.zero;
+        bgRt.anchorMax = Vector2.one;
+        bgRt.offsetMin = Vector2.zero;
+        bgRt.offsetMax = Vector2.zero;
+        Image bgImg = bgGo.AddComponent<Image>();
+        bgImg.color = backdropColor;
+        bgImg.raycastTarget = true;
+
+        float settingsHeight = 465f;
+        GameObject winGo = CreateUINode(WindowObjectName, panelGo.transform, recordUndo);
+        RectTransform winRt = winGo.GetComponent<RectTransform>();
+        winRt.anchorMin = winRt.anchorMax = winRt.pivot = new Vector2(0.5f, 0.5f);
+        winRt.sizeDelta = new Vector2(windowWidth, settingsHeight);
+        winRt.anchoredPosition = new Vector2(0f, verticalOffset);
+
+        Image winImg = winGo.AddComponent<Image>();
+        winImg.color = windowColor;
+
+        if (borderThickness > 0.05f)
+        {
+            Outline outline = winGo.AddComponent<Outline>();
+            outline.effectColor = new Color(accentColor.r, accentColor.g, accentColor.b, accentColor.a * 0.65f);
+            outline.effectDistance = new Vector2(borderThickness, -borderThickness);
+        }
+
+        if (showTopAccentBar)
+        {
+            GameObject topBar = CreateUINode("TopAccentBar", winGo.transform, recordUndo);
+            RectTransform barRt = topBar.GetComponent<RectTransform>();
+            barRt.anchorMin = new Vector2(0f, 1f);
+            barRt.anchorMax = new Vector2(1f, 1f);
+            barRt.pivot = new Vector2(0.5f, 1f);
+            barRt.sizeDelta = new Vector2(0f, 4f);
+            barRt.anchoredPosition = Vector2.zero;
+            Image barImg = topBar.AddComponent<Image>();
+            barImg.color = accentColor;
+            barImg.raycastTarget = false;
+        }
+
+        float curY = settingsHeight * 0.5f - windowPadding;
+        float contentW = windowWidth - windowPadding * 2f;
+
+        // Заголовок SETTINGS
+        GameObject titleGo = CreateStyledText("SettingsTitle", winGo.transform, textTemplate, "SETTINGS", titleFontSize, titleColor, true, recordUndo);
+        RectTransform trt = titleGo.GetComponent<RectTransform>();
+        trt.anchorMin = trt.anchorMax = trt.pivot = new Vector2(0.5f, 0.5f);
+        trt.sizeDelta = new Vector2(contentW, 40f);
+        trt.anchoredPosition = new Vector2(0f, curY - 18f);
+        curY -= 48f;
+
+        // 1. Горизонтальная чувствительность (Slider + InputField)
+        CreateSensitivityRow(
+            winGo.transform,
+            textTemplate,
+            "HorizontalSens",
+            "Horizontal Sensitivity (X)",
+            contentW,
+            ref curY,
+            recordUndo,
+            out Slider horizSlider,
+            out InputField horizInput);
+
+        // 2. Вертикальная чувствительность (Slider + InputField)
+        CreateSensitivityRow(
+            winGo.transform,
+            textTemplate,
+            "VerticalSens",
+            "Vertical Sensitivity (Y)",
+            contentW,
+            ref curY,
+            recordUndo,
+            out Slider vertSlider,
+            out InputField vertInput);
+
+        // 3. Лимит FPS
+        GameObject fpsLabelGo = CreateStyledText("FpsLabel", winGo.transform, textTemplate, "Frame Rate Limit (FPS)", 15, buttonTextColor, false, recordUndo);
+        RectTransform fpsLRt = fpsLabelGo.GetComponent<RectTransform>();
+        fpsLRt.anchorMin = fpsLRt.anchorMax = fpsLRt.pivot = new Vector2(0.5f, 0.5f);
+        fpsLRt.sizeDelta = new Vector2(contentW, 20f);
+        fpsLRt.anchoredPosition = new Vector2(0f, curY);
+        if (fpsLabelGo.TryGetComponent(out Text fpsLblTxt)) fpsLblTxt.alignment = TextAnchor.MiddleLeft;
+        curY -= 26f;
+
+        Dropdown dropdown = CreateFpsDropdown(winGo.transform, textTemplate, contentW, curY, recordUndo);
+        curY -= 28f;
+
+        // Живой счётчик текущего FPS для проверки на любом ПК
+        GameObject liveFpsGo = CreateStyledText("CurrentFpsText", winGo.transform, textTemplate, "Current: -- FPS", 13, subtitleColor, false, recordUndo);
+        RectTransform lfRt = liveFpsGo.GetComponent<RectTransform>();
+        lfRt.anchorMin = lfRt.anchorMax = lfRt.pivot = new Vector2(0.5f, 0.5f);
+        lfRt.sizeDelta = new Vector2(contentW, 18f);
+        lfRt.anchoredPosition = new Vector2(0f, curY);
+        if (liveFpsGo.TryGetComponent(out Text liveFpsTxt)) liveFpsTxt.alignment = TextAnchor.MiddleLeft;
+        curY -= 38f;
+
+        GameSettings settingsComp = panelGo.GetComponent<GameSettings>();
+        if (settingsComp == null)
+            settingsComp = panelGo.AddComponent<GameSettings>();
+
+        settingsComp.horizontalSensSlider = horizSlider;
+        settingsComp.horizontalSensInput = horizInput;
+        settingsComp.verticalSensSlider = vertSlider;
+        settingsComp.verticalSensInput = vertInput;
+        settingsComp.fpsDropdown = dropdown;
+        settingsComp.currentFpsText = liveFpsTxt;
+
+        // Нижний ряд кнопок: Reset и Back
+        float gap = 12f;
+        float halfBtnW = (contentW - gap) * 0.5f;
+        float btnY = curY - buttonHeight * 0.5f;
+
+        GameObject resetBtnObj = Instantiate(buttonTemplate, winGo.transform);
+        resetBtnObj.name = "ResetButton";
+        resetBtnObj.SetActive(true);
+        RectTransform rRt = resetBtnObj.GetComponent<RectTransform>();
+        rRt.anchorMin = rRt.anchorMax = rRt.pivot = new Vector2(0.5f, 0.5f);
+        rRt.sizeDelta = new Vector2(halfBtnW, buttonHeight);
+        rRt.anchoredPosition = new Vector2(-(halfBtnW * 0.5f + gap * 0.5f), btnY);
+
+        if (applyButtonStyle) StyleButtonVisuals(resetBtnObj, recordUndo);
+        SetButtonLabel(resetBtnObj, "Reset", applyButtonStyle ? Mathf.Max(15, buttonFontSize - 2) : -1, applyButtonStyle ? buttonTextColor : (Color?)null);
+
+        Button resetBtn = resetBtnObj.GetComponent<Button>();
+        if (resetBtn != null)
+            BindButtonAction(resetBtn, settingsComp.ResetToDefaults, recordUndo);
+
+        GameObject backBtnObj = Instantiate(buttonTemplate, winGo.transform);
+        backBtnObj.name = "BackButton";
+        backBtnObj.SetActive(true);
+        RectTransform bRt = backBtnObj.GetComponent<RectTransform>();
+        bRt.anchorMin = bRt.anchorMax = bRt.pivot = new Vector2(0.5f, 0.5f);
+        bRt.sizeDelta = new Vector2(halfBtnW, buttonHeight);
+        bRt.anchoredPosition = new Vector2(halfBtnW * 0.5f + gap * 0.5f, btnY);
+
+        if (applyButtonStyle) StyleButtonVisuals(backBtnObj, recordUndo);
+        SetButtonLabel(backBtnObj, "Back", applyButtonStyle ? Mathf.Max(15, buttonFontSize - 2) : -1, applyButtonStyle ? buttonTextColor : (Color?)null);
+
+        Button backBtn = backBtnObj.GetComponent<Button>();
+        if (backBtn != null)
+            BindButtonAction(backBtn, CloseSettings, recordUndo);
+    }
+
+    private void CreateSensitivityRow(
+        Transform parent,
+        GameObject textTemplate,
+        string prefix,
+        string title,
+        float contentW,
+        ref float curY,
+        bool recordUndo,
+        out Slider slider,
+        out InputField inputField)
+    {
+        GameObject labelGo = CreateStyledText(prefix + "Label", parent, textTemplate, title, 15, buttonTextColor, false, recordUndo);
+        RectTransform lRt = labelGo.GetComponent<RectTransform>();
+        lRt.anchorMin = lRt.anchorMax = lRt.pivot = new Vector2(0.5f, 0.5f);
+        lRt.sizeDelta = new Vector2(contentW, 20f);
+        lRt.anchoredPosition = new Vector2(0f, curY);
+        if (labelGo.TryGetComponent(out Text lblText)) lblText.alignment = TextAnchor.MiddleLeft;
+        curY -= 26f;
+
+        float inputWidth = 76f;
+        float spacing = 12f;
+        float sliderWidth = Mathf.Max(120f, contentW - inputWidth - spacing);
+
+        // Слайдер слева
+        GameObject sliderGo = new GameObject(prefix + "Slider", typeof(RectTransform), typeof(Slider));
+        sliderGo.transform.SetParent(parent, false);
+        RectTransform sRt = sliderGo.GetComponent<RectTransform>();
+        sRt.anchorMin = sRt.anchorMax = sRt.pivot = new Vector2(0.5f, 0.5f);
+        sRt.sizeDelta = new Vector2(sliderWidth, 30f);
+        sRt.anchoredPosition = new Vector2(-(inputWidth + spacing) * 0.5f, curY);
+
+        slider = sliderGo.GetComponent<Slider>();
+
+        GameObject bgSlider = CreateUINode("Background", sliderGo.transform, recordUndo);
+        RectTransform bgSRt = bgSlider.GetComponent<RectTransform>();
+        bgSRt.anchorMin = new Vector2(0f, 0.28f);
+        bgSRt.anchorMax = new Vector2(1f, 0.72f);
+        bgSRt.offsetMin = bgSRt.offsetMax = Vector2.zero;
+        Image bgSImg = bgSlider.AddComponent<Image>();
+        bgSImg.color = new Color(0.15f, 0.22f, 0.3f, 1f);
+
+        GameObject fillArea = CreateUINode("Fill Area", sliderGo.transform, recordUndo);
+        RectTransform faRt = fillArea.GetComponent<RectTransform>();
+        faRt.anchorMin = new Vector2(0f, 0.28f);
+        faRt.anchorMax = new Vector2(1f, 0.72f);
+        faRt.offsetMin = faRt.offsetMax = Vector2.zero;
+
+        GameObject fill = CreateUINode("Fill", fillArea.transform, recordUndo);
+        RectTransform fRt = fill.GetComponent<RectTransform>();
+        fRt.anchorMin = fRt.anchorMax = fRt.pivot = new Vector2(0f, 0.5f);
+        fRt.sizeDelta = Vector2.zero;
+        Image fillImg = fill.AddComponent<Image>();
+        fillImg.color = accentColor;
+        slider.fillRect = fRt;
+
+        GameObject handleArea = CreateUINode("Handle Slide Area", sliderGo.transform, recordUndo);
+        RectTransform haRt = handleArea.GetComponent<RectTransform>();
+        haRt.anchorMin = Vector2.zero;
+        haRt.anchorMax = Vector2.one;
+        haRt.offsetMin = new Vector2(9f, 0f);
+        haRt.offsetMax = new Vector2(-9f, 0f);
+
+        GameObject handle = CreateUINode("Handle", handleArea.transform, recordUndo);
+        RectTransform hRt = handle.GetComponent<RectTransform>();
+        hRt.sizeDelta = new Vector2(18f, 0f);
+        Image handleImg = handle.AddComponent<Image>();
+        handleImg.color = Color.white;
+        slider.handleRect = hRt;
+
+        // Поле ручного ввода справа
+        GameObject inputGo = new GameObject(prefix + "Input", typeof(RectTransform), typeof(Image), typeof(InputField));
+        inputGo.transform.SetParent(parent, false);
+        RectTransform iRt = inputGo.GetComponent<RectTransform>();
+        iRt.anchorMin = iRt.anchorMax = iRt.pivot = new Vector2(0.5f, 0.5f);
+        iRt.sizeDelta = new Vector2(inputWidth, 32f);
+        iRt.anchoredPosition = new Vector2((sliderWidth + spacing) * 0.5f, curY);
+
+        Image inputBg = inputGo.GetComponent<Image>();
+        inputBg.color = buttonNormalColor;
+
+        Outline inputOutline = inputGo.AddComponent<Outline>();
+        inputOutline.effectColor = new Color(accentColor.r, accentColor.g, accentColor.b, 0.45f);
+        inputOutline.effectDistance = new Vector2(1f, -1f);
+
+        GameObject inputTextGo = CreateStyledText("Text", inputGo.transform, textTemplate, "1", 15, accentColor, true, recordUndo);
+        RectTransform itRt = inputTextGo.GetComponent<RectTransform>();
+        itRt.anchorMin = Vector2.zero;
+        itRt.anchorMax = Vector2.one;
+        itRt.offsetMin = new Vector2(6f, 2f);
+        itRt.offsetMax = new Vector2(-6f, -2f);
+        Text inputTxt = inputTextGo.GetComponent<Text>();
+        if (inputTxt != null)
+        {
+            inputTxt.alignment = TextAnchor.MiddleCenter;
+            inputTxt.supportRichText = false;
+            inputTxt.raycastTarget = true;
+        }
+
+        inputField = inputGo.GetComponent<InputField>();
+        inputField.targetGraphic = inputBg;
+        inputField.textComponent = inputTxt;
+        inputField.contentType = InputField.ContentType.DecimalNumber;
+        inputField.characterLimit = 5;
+        inputField.text = "1";
+
+        curY -= 40f;
+    }
+
+    private Dropdown CreateFpsDropdown(Transform parent, GameObject textTemplate, float contentW, float curY, bool recordUndo)
+    {
+        GameObject dropdownGo = new GameObject("FpsDropdown", typeof(RectTransform), typeof(Image), typeof(Dropdown));
+        dropdownGo.transform.SetParent(parent, false);
+        RectTransform ddRt = dropdownGo.GetComponent<RectTransform>();
+        ddRt.anchorMin = ddRt.anchorMax = ddRt.pivot = new Vector2(0.5f, 0.5f);
+        ddRt.sizeDelta = new Vector2(contentW, 36f);
+        ddRt.anchoredPosition = new Vector2(0f, curY);
+
+        Image ddImg = dropdownGo.GetComponent<Image>();
+        ddImg.color = buttonNormalColor;
+
+        Outline ddOutline = dropdownGo.AddComponent<Outline>();
+        ddOutline.effectColor = new Color(accentColor.r, accentColor.g, accentColor.b, 0.35f);
+        ddOutline.effectDistance = new Vector2(1f, -1f);
+
+        Dropdown dropdown = dropdownGo.GetComponent<Dropdown>();
+
+        GameObject ddLabelGo = CreateStyledText("Label", dropdownGo.transform, textTemplate, "60 FPS", 16, buttonTextColor, false, recordUndo);
+        RectTransform ddlRt = ddLabelGo.GetComponent<RectTransform>();
+        ddlRt.anchorMin = Vector2.zero;
+        ddlRt.anchorMax = Vector2.one;
+        ddlRt.offsetMin = new Vector2(12f, 0f);
+        ddlRt.offsetMax = new Vector2(-28f, 0f);
+        if (ddlRt.TryGetComponent(out Text ddText)) ddText.alignment = TextAnchor.MiddleLeft;
+        dropdown.captionText = ddText;
+
+        GameObject arrowGo = CreateStyledText("Arrow", dropdownGo.transform, textTemplate, "▼", 12, accentColor, false, recordUndo);
+        RectTransform arrRt = arrowGo.GetComponent<RectTransform>();
+        arrRt.anchorMin = new Vector2(1f, 0f);
+        arrRt.anchorMax = new Vector2(1f, 1f);
+        arrRt.pivot = new Vector2(1f, 0.5f);
+        arrRt.sizeDelta = new Vector2(28f, 0f);
+        arrRt.anchoredPosition = Vector2.zero;
+
+        // Обязательный шаблон (Template) для Dropdown
+        GameObject templateGo = CreateUINode("Template", dropdownGo.transform, recordUndo);
+        RectTransform tRt = templateGo.GetComponent<RectTransform>();
+        tRt.anchorMin = new Vector2(0f, 0f);
+        tRt.anchorMax = new Vector2(1f, 0f);
+        tRt.pivot = new Vector2(0.5f, 1f);
+        tRt.anchoredPosition = new Vector2(0f, 2f);
+        tRt.sizeDelta = new Vector2(0f, 160f);
+        Image tImg = templateGo.AddComponent<Image>();
+        tImg.color = buttonNormalColor;
+        ScrollRect scrollRect = templateGo.AddComponent<ScrollRect>();
+        scrollRect.horizontal = false;
+        scrollRect.vertical = true;
+        scrollRect.movementType = ScrollRect.MovementType.Clamped;
+        templateGo.SetActive(false);
+
+        GameObject viewportGo = CreateUINode("Viewport", templateGo.transform, recordUndo);
+        RectTransform vpRt = viewportGo.GetComponent<RectTransform>();
+        vpRt.anchorMin = Vector2.zero;
+        vpRt.anchorMax = Vector2.one;
+        vpRt.sizeDelta = Vector2.zero;
+        vpRt.offsetMin = new Vector2(4f, 4f);
+        vpRt.offsetMax = new Vector2(-4f, -4f);
+        viewportGo.AddComponent<Mask>().showMaskGraphic = false;
+        viewportGo.AddComponent<Image>();
+        scrollRect.viewport = vpRt;
+
+        GameObject contentGo = CreateUINode("Content", viewportGo.transform, recordUndo);
+        RectTransform cRt = contentGo.GetComponent<RectTransform>();
+        cRt.anchorMin = new Vector2(0f, 1f);
+        cRt.anchorMax = new Vector2(1f, 1f);
+        cRt.pivot = new Vector2(0.5f, 1f);
+        cRt.sizeDelta = new Vector2(0f, 150f);
+        VerticalLayoutGroup vlg = contentGo.AddComponent<VerticalLayoutGroup>();
+        vlg.childControlHeight = true;
+        vlg.childControlWidth = true;
+        scrollRect.content = cRt;
+
+        GameObject itemGo = CreateUINode("Item", contentGo.transform, recordUndo);
+        RectTransform iRt = itemGo.GetComponent<RectTransform>();
+        iRt.sizeDelta = new Vector2(0f, 30f);
+        Toggle toggle = itemGo.AddComponent<Toggle>();
+        Image itemBg = itemGo.AddComponent<Image>();
+        itemBg.color = new Color(0.16f, 0.24f, 0.33f, 1f);
+        toggle.targetGraphic = itemBg;
+        ColorBlock tcb = toggle.colors;
+        tcb.highlightedColor = buttonHighlightColor;
+        tcb.pressedColor = buttonPressedColor;
+        toggle.colors = tcb;
+
+        GameObject itemLabelGo = CreateStyledText("Item Label", itemGo.transform, textTemplate, "60 FPS", 15, buttonTextColor, false, recordUndo);
+        RectTransform ilRt = itemLabelGo.GetComponent<RectTransform>();
+        ilRt.anchorMin = Vector2.zero;
+        ilRt.anchorMax = Vector2.one;
+        ilRt.offsetMin = new Vector2(10f, 0f);
+        ilRt.offsetMax = new Vector2(-10f, 0f);
+        if (ilRt.TryGetComponent(out Text itemText)) itemText.alignment = TextAnchor.MiddleLeft;
+        toggle.graphic = itemBg;
+
+        dropdown.template = tRt;
+        dropdown.itemText = itemText;
+
+        return dropdown;
     }
 
     private void StyleButtonVisuals(GameObject btnObj, bool recordUndo)
@@ -608,7 +1033,6 @@ public class PauseMenuManager : MonoBehaviour
 
     private GameObject FindTextTemplate(Transform root, Transform confirmRoot, Transform settingsRoot)
     {
-        // Ищем любой существующий текстовый объект (Text или TextMeshProUGUI), чтобы скопировать шрифт проекта
         Component[] allComps = root.GetComponentsInChildren<Component>(true);
         for (int i = 0; i < allComps.Length; i++)
         {
@@ -617,11 +1041,10 @@ public class PauseMenuManager : MonoBehaviour
             if (confirmRoot != null && (c.transform == confirmRoot || c.transform.IsChildOf(confirmRoot))) continue;
             if (settingsRoot != null && (c.transform == settingsRoot || c.transform.IsChildOf(settingsRoot))) continue;
 
-            if (c is Text || c.GetType().Name == "TextMeshProUGUI")
+            if (c is Text)
             {
                 GameObject clone = Instantiate(c.gameObject);
                 clone.SetActive(false);
-                // Удаляем дочерние объекты, если были
                 for (int ch = clone.transform.childCount - 1; ch >= 0; ch--)
                     DestroySafe(clone.transform.GetChild(ch).gameObject);
                 return clone;
@@ -633,7 +1056,7 @@ public class PauseMenuManager : MonoBehaviour
     private GameObject CreateStyledText(string objName, Transform parent, GameObject textTemplate, string content, int fontSize, Color color, bool bold, bool recordUndo)
     {
         GameObject go;
-        if (textTemplate != null)
+        if (textTemplate != null && textTemplate.GetComponent<Text>() != null)
         {
             go = Instantiate(textTemplate, parent);
             go.name = objName;
@@ -651,7 +1074,6 @@ public class PauseMenuManager : MonoBehaviour
             t.alignment = TextAnchor.MiddleCenter;
         }
 
-        // Настраиваем стандартный Text
         if (go.TryGetComponent(out Text uiText))
         {
             uiText.text = content;
@@ -660,23 +1082,6 @@ public class PauseMenuManager : MonoBehaviour
             uiText.alignment = TextAnchor.MiddleCenter;
             uiText.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
             uiText.raycastTarget = false;
-            return go;
-        }
-
-        // Настраиваем TextMeshProUGUI через reflection (без жёсткой зависимости)
-        Component[] comps = go.GetComponents<Component>();
-        for (int i = 0; i < comps.Length; i++)
-        {
-            if (comps[i] == null) continue;
-            Type tp = comps[i].GetType();
-            if (tp.Name == "TextMeshProUGUI" || tp.Name == "TMP_Text")
-            {
-                tp.GetProperty("text")?.SetValue(comps[i], content);
-                tp.GetProperty("fontSize")?.SetValue(comps[i], (float)fontSize);
-                tp.GetProperty("color")?.SetValue(comps[i], color);
-                tp.GetProperty("raycastTarget")?.SetValue(comps[i], false);
-                break;
-            }
         }
 
         return go;
@@ -692,7 +1097,6 @@ public class PauseMenuManager : MonoBehaviour
         Transform oldWindow = pausePanel.transform.Find(WindowObjectName);
         if (oldWindow != null) toDelete.Add(oldWindow.gameObject);
 
-        // Также убираем старые одиночные кнопки, лежащие напрямую в PausePanel
         var buttons = pausePanel.GetComponentsInChildren<Button>(true);
         for (int i = 0; i < buttons.Length; i++)
         {

@@ -16,8 +16,8 @@ TagManager:
   - Water
   - UI
   - Graund
-  - Plate
-  - Column
+  - HardWall
+  - FadeObstacle
   - Ball
   - 
   - 

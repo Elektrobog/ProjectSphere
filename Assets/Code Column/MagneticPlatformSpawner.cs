@@ -593,6 +593,7 @@ public class MagneticPlatformSpawner : MonoBehaviour
         float r = Mathf.Max(0.1f, columnRadius);
 
         var go = new GameObject(ColumnColliderName);
+        go.layer = colRoot.gameObject.layer;
         go.hideFlags = HideFlags.DontSave;
         go.transform.SetParent(colRoot, false);
         go.transform.localPosition = new Vector3(0f, centerY, 0f);
@@ -679,6 +680,14 @@ public class MagneticPlatformSpawner : MonoBehaviour
         return mesh;
     }
 
+    static void SetLayerRecursively(GameObject obj, int layer)
+    {
+        obj.layer = layer;
+        Transform t = obj.transform;
+        for (int i = 0; i < t.childCount; i++)
+            SetLayerRecursively(t.GetChild(i).gameObject, layer);
+    }
+
     // ---------------------------------------------------------------- жизненный цикл и вращение
 
     void Start()
@@ -735,11 +744,16 @@ public class MagneticPlatformSpawner : MonoBehaviour
         if (cont == null && create)
         {
             var go = new GameObject(ContainerName);
+            go.layer = gameObject.layer;
             go.transform.SetParent(transform, false);
             cont = go.transform;
 #if UNITY_EDITOR
             if (!Application.isPlaying) Undo.RegisterCreatedObjectUndo(go, "Создать контейнер платформ");
 #endif
+        }
+        else if (cont != null)
+        {
+            cont.gameObject.layer = gameObject.layer;
         }
         return cont;
     }
@@ -771,6 +785,7 @@ public class MagneticPlatformSpawner : MonoBehaviour
             }
 
             var go = new GameObject("Platform r" + s.row + " c" + s.column + " x" + s.columnSpan);
+            go.layer = gameObject.layer;
             go.SetActive(false);
             go.transform.SetParent(cont, false);
             go.transform.SetPositionAndRotation(
@@ -819,6 +834,7 @@ public class MagneticPlatformSpawner : MonoBehaviour
             if (!Application.isPlaying) Undo.RegisterCreatedObjectUndo(go, "Сгенерировать платформу");
 #endif
             go.SetActive(true);
+            SetLayerRecursively(go, gameObject.layer);
             made++;
         }
 
